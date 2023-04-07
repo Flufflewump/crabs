@@ -190,6 +190,8 @@ function switchTab(tabName) {
 	}
 	tab.tabNode.classList.add('active');
 	tab.paneNode.classList.add('active');
+
+	saveGame();
 }
 
 function createTabDisplay(tabName) {
@@ -209,11 +211,12 @@ function createTabDisplay(tabName) {
 	var newTabPane = document.createElement('div');
 	newTabPane.classList.add('pane');
 	newTabPane.classList.add('locked');
+	newTabPane.setAttribute('id', tabName);
 	newTabPane.innerText = tab.text;
 
 	// Add buttons
 	var buttonDiv = document.createElement('div');
-	buttonDiv.classList.add('buttonList');
+	buttonDiv.classList.add('button-list');
 	newTabPane.appendChild(buttonDiv);
 
 	for (const button of tab.buttons) {

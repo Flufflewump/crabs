@@ -76,12 +76,37 @@ main {
     border-radius: 10px 10px 0 0;
     border-width: 2px 2px 0 2px;
 }
-
     .tab.active {
         background-color: #808080;
         color: #222;
     }
 
+.tab#beach {
+    background-color: darkgoldenrod;
+    color: #222
+}
+    .tab#beach.active {
+        background-color: goldenrod;
+    }
+
+.pane#beach {
+    background-color: goldenrod;
+}
+
+.tab#ocean {
+    background-color: midnightblue;
+    color: #ccc;
+}
+
+    .tab#ocean.active {
+        background-color: darkblue;
+        color: #ccc
+    }
+
+.pane#ocean {
+    background-color: darkblue;
+    color: #ccc;
+}
 
 #panes {
     padding: 0;
@@ -91,12 +116,20 @@ main {
 .pane {
     display: none;
     background-color: #808080;
-    padding: 1.5em 1em;
+    padding: 1.5em 1em 0 1em;
     border-radius: 0 10px 10px 10px;
 }
     .pane.active {
         display: block;
     }
+
+.button-list {
+    padding: 1em 0;
+}
+
+button {
+    
+}
 
 .locked {
     display: none;
