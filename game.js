@@ -1,8 +1,5 @@
 //@ts-check
 
-var game = {
-	tabs: new Map(), resources: new Map(), milestones: new Map(), debug: false, activeTab: null};
-
 var msgLog;
 var resourceList;
 var tabList;
@@ -11,9 +8,14 @@ var statusMsg;
 
 /*
  * 
- * Object Definitions
+ * OBJECT DEFINITIONS
  * 
  */
+
+var game = {
+	tabs: new Map(), resources: new Map(), milestones: new Map(), debug: false, activeTab: null
+};
+
 
 function GameTab(name, text, buttons) {
 	this.name = name;
@@ -47,16 +49,16 @@ function Button(text, func, enableTest = function () { return true; }) {
 	this.visible = false;
 	this.enableTest = enableTest;
 
-	this.makeVisible = function(vis) {
+	this.makeVisible = function (vis) {
 		if (this.visible != vis) {
 			this.visible = vis;
 			if (vis) {
 				// @ts-ignore
-				this.node.classList.remove('locked');
+				this.visible = true;
 			} else {
 				// @ts-ignore
-				this.node.classList.add('locked');
-            }
+				this.visible = true;
+			}
 		}
 	}
 }
@@ -77,25 +79,20 @@ game.resources.set('magic', new Resource('Magic'));
 game.tabs.set('beach', new GameTab('Beach', 'Sand and rocks line the beach', new Map([
 	['sand', new Button('Gather sand', 'gatherButton()')],
 	['sandcastle', new Button('Make sandcastle', 'makeSandcastle()', function () { return (game.resources.get('sand').amount >= 10) })]
-]) ));
+])));
 game.tabs.set('ocean', new GameTab('Ocean', 'The ocean is blue', new Map()));
 
 // Milestones
 game.milestones.set('sandCastleUnlock', new Milestone('sandCastleUnlock',
-	function () { log('checking to unlock sandcastles', true); return ( game.resources.get('sand').amount >= 10); },
+	function () { return (game.resources.get('sand').amount >= 10); },
 	function () {
 		log('You have a little pile of sand. You could make a sandcastle out of it');
-		game.tabs.get('beach').buttons.get('castle').makeVisible(true);
+		game.tabs.get('beach').buttons.get('sandcastle').makeVisible(true);
 	}));
 
 /*
- * 
- * --------------------------------
- * 
- *	CONTENT LOADED AND GAME LOOP
- * 
- * --------------------------------
- * 
+ *
+ *	       CONTENT LOADED
  * 
  */
 
@@ -105,6 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	tabList = document.getElementById('tabs');
 	statusMsg = document.getElementById('status');
 
+	// @ts-ignore
 	statusMsg.innerText = "You are a crab.";
 
 	for (const [key, value] of game.resources) {
@@ -124,6 +122,15 @@ document.addEventListener('DOMContentLoaded', function () {
 	log('Debug mode is ' + (game.debug ? 'enabled' : 'disabled'), true);
 });
 
+
+
+
+/**********************************
+ *                                *
+ *	          GAME LOOP           *
+ *                                *
+ **********************************/
+
 function update() {
 	for (var [milestoneName, value] of game.milestones) {
 		var milestone = game.milestones.get(milestoneName);
@@ -132,11 +139,47 @@ function update() {
 			milestone.unlocked = true;
         }
     }
+
+	updateUI();
+}
+
+function updateUI() {
+	// Show unlocked resources
+	for (const [resourceKey, resourceValue] of game.resources) {
+		if (resourceValue.unlocked) {
+			resourceValue.displayNode.classList.remove('locked');
+			// Update displayed amount
+			resourceValue.amountNode.innerText = resourceValue.amount;
+        } else {
+			resourceValue.displayNode.classList.add('locked');
+		}
+    }
+
+	// Tabs
+	for (const [tabKey, tabValue] of game.tabs) {
+		if (tabValue.unlocked) {
+			tabValue.tabNode.classList.remove('locked');
+			tabValue.paneNode.classList.remove('locked');
+        } else {
+			tabValue.tabNode.classList.add('locked');
+			tabValue.paneNode.classList.add('locked');
+		}
+		// Buttons
+		for (const [buttonKey, buttonValue] of tabValue.buttons) {
+			if (buttonValue.visible) {
+				buttonValue.node.classList.remove('locked');
+			} else {
+				buttonValue.node.classList.add('locked');
+			}
+		}
+    }
+
+	
 }
 
 /*
  * 
- * BUTTONS
+ * BUTTON FUNCTIONS
  * 
  */
 
@@ -144,60 +187,17 @@ function gatherButton() {
 	addResource('sand', 1);
 }
 
-function loadGame() {
-	//localStorage.removeItem('game');
-	const gameStr = localStorage.getItem('game');
-
-	var tempGame
-	if (gameStr !== null) {
-		tempGame = JSON.parse(gameStr);
-		tempGame.resources = arrayToMap(tempGame.resources);
-		tempGame.tabs = arrayToMap(tempGame.tabs);
-		tempGame.milestones = arrayToMap(tempGame.milestones);
-
-
-		// Set up all the stuff from the save
-		game.debug = tempGame.debug;
-		for (const [resName, value] of tempGame.resources) {
-			if (!value.unlocked) {
-				continue;
-            }
-
-			if (game.resources.get(resName) == null) {
-				log('Attempted to load non-existant resource ' + resName, true);
-            }
-			log('LOAD: unlocking ' + resName, true);
-			unlockResource(resName);
-			log('LOAD: adding ' + value.amount, true);
-			addResource(resName, value.amount);
-		}
-		for (var [tab, value] of tempGame.tabs) {
-			unlockTab(tab);
-		}
-
-		switchTab(tempGame.activeTab);
-	} else {
-		// No savegame, start from the beginning
-		unlockResource('sand');
-		unlockResource('rocks');
-		unlockTab('beach');
-		unlockTab('ocean');
-
-		switchTab('beach');
-	}
-	game.tabs.get('beach').buttons.get('sand').makeVisible(true);
-}
-
 /*
- * Resources
+ * 
+ * HELPER FUNCTIONS: RESOURCES
+ * 
  */
 
 function addResource(resName, amount) {
 	var res = game.resources.get(resName);
 	res.amount += amount;
 
-	res.amountNode.innerText = res.amount;
-
+	updateUI();
 	saveGame();
 }
 
@@ -218,8 +218,6 @@ function createResourceDisplay(resName) {
 	res.displayNode = newResource;
 	res.amountNode = newAmountNode;
 
-	log(res.displayNode);
-
 	//Put it all together
 	newResource.innerText = res.name + ': ';
 	newResource.appendChild(newAmountNode);
@@ -230,14 +228,13 @@ function createResourceDisplay(resName) {
 function unlockResource(resName) {
 	var res = game.resources.get(resName);
 	res.unlocked = true;
-	res.displayNode.classList.remove('locked');
 
 	saveGame();
 }
 
 /*
  * 
- * Tabs
+ * HELPER FUNCTIONS: TABS
  * 
  */
 
@@ -293,12 +290,12 @@ function createTabDisplay(tabName) {
 		buttonDiv.appendChild(newButton);
     }
 
-	// Keep it in game.tabs so it can be updated
 	tab.tabNode = newTab;
 	tab.paneNode = newTabPane;
 
 	// Add them to the DOM
 	tabList.appendChild(newTab);
+	// @ts-ignore
 	document.getElementById('panes').appendChild(newTabPane);
 
 }
@@ -306,10 +303,14 @@ function createTabDisplay(tabName) {
 function unlockTab(name) {
 	var tab = game.tabs.get(name);
 
-	tab.unlocked = true;
-	tab.tabNode.classList.remove('locked');
-	tab.paneNode.classList.remove('locked');	
+	tab.unlocked = true;	
 }
+
+/*
+ * 
+ * LOGGING
+ * 
+ */
 
 function log(msg, debug = false) {
 	if (debug) {
@@ -325,23 +326,94 @@ function log(msg, debug = false) {
 	msgLog.scrollTop = msgLog.scrollHeight;
 }
 
+/*
+ * 
+ * SAVE
+ * 
+ */
+
 function saveGame() {
+	var saveData = {resources : {}, tabs: {}, buttons: {}, milestones: {}, activeTab: null , debug: false}
+	for (const [key, value] of game.resources) {
+		saveData.resources[key] = [value.amount, value.unlocked];
+	}
+	for (const [key, value] of game.tabs) {
+		saveData.tabs[key] = [value.unlocked];
 
-	// de-map the maps
-	const jsonString = JSON.stringify(game, (key, value) => {
-		if (value instanceof Map) {
-			return [...value];
+		for (const [buttonKey, buttonValue] of value.buttons) {
+			saveData.buttons[buttonKey] = [key, buttonValue.visible];
 		}
-		return value;
-	});
+	}
+	for (const [key, value] of game.milestones) {
+		saveData.milestones[key] =  [value.unlocked];
+    }
+	saveData.activeTab = game.activeTab;
 
-	localStorage.setItem('game', jsonString);
+	saveData.debug = game.debug;
+
+	localStorage.setItem('game', JSON.stringify(saveData));
 }
 
-function arrayToMap(array) {
-	const map = new Map();
-	array.forEach(([key, value]) => {
-		map.set(key, value);
-	});
-	return map;
+/*
+ * 
+ * LOAD
+ * 
+ */
+
+function loadGame() {
+	const gameStr = localStorage.getItem('game');
+
+	if (gameStr !== null) {
+		var saveData = JSON.parse(gameStr);
+
+		/*
+		 * Set up all the stuff from the save
+		 */
+
+		// Resources [unlocked, amount]
+		for (const res in saveData.resources) {
+			game.resources.get(res).unlocked = saveData.resources[res][1];
+			game.resources.get(res).amount = saveData.resources[res][0];
+		}
+
+		// Tabs [unlocked]
+		for (const tab in saveData.tabs) {
+			game.tabs.get(tab).unlocked = saveData.tabs[tab][0];
+		}
+
+		// Buttons [tab, visible]
+		for (const button in saveData.buttons) {
+			game.tabs.get(saveData.buttons[button][0]).buttons.get(button).visible = saveData.buttons[button][1];
+		}
+
+		// Milestones [unlocked]
+		for (const milestone in saveData.milestones) {
+			game.milestones.get(milestone).unlocked = saveData.milestones[milestone][0];
+		}
+
+		// Debug mode
+		game.debug = saveData.debug;
+
+		updateUI();
+		
+		switchTab(saveData.activeTab);
+
+	} else {
+		// No savegame, start from the beginning
+		unlockResource('sand');
+		unlockResource('rocks');
+		unlockTab('beach');
+		unlockTab('ocean');
+
+		switchTab('beach');
+	}
+
+	game.tabs.get('beach').buttons.get('sand').makeVisible(true);
+}
+
+function debugReset() {
+	localStorage.removeItem('game');
+	loadGame();
+	game.debug = true;
+	saveGame();
 }
