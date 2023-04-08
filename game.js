@@ -123,6 +123,14 @@ game.milestones.set('oceanDrained', new Milestone('oceanDrained',
 	}, true)
 );
 
+game.milestones.set('oceanBack', new Milestone('oceanBack',
+	function () { return (!game.globals.get('oceanDrained')); },
+	function () {
+		game.tabs.get('ocean').textNode.textContent = "The ocean is blue";
+		this.active = false;
+	}, true)
+);
+
 // Globals
 game.globals.set('oceanDrained', false);
 
