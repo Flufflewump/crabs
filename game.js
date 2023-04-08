@@ -57,7 +57,7 @@ function Button(text, func, enableTest = function () { return true; }) {
 				this.visible = true;
 			} else {
 				// @ts-ignore
-				this.visible = true;
+				this.visible = false;
 			}
 		}
 	}
@@ -73,6 +73,8 @@ function Milestone(name, test, event) {
 // Create all the resources
 game.resources.set('sand', new Resource('Sand'));
 game.resources.set('rocks', new Resource('Rocks'));
+game.resources.set('wet', new Resource('Wet'));
+game.resources.set('sandcastles', new Resource('Sandcastles'));
 game.resources.set('magic', new Resource('Magic'));
 
 // And the tabs
@@ -80,7 +82,9 @@ game.tabs.set('beach', new GameTab('Beach', 'Sand and rocks line the beach', new
 	['sand', new Button('Gather sand', 'gatherButton()')],
 	['sandcastle', new Button('Make sandcastle', 'makeSandcastle()', function () { return (game.resources.get('sand').amount >= 10) })]
 ])));
-game.tabs.set('ocean', new GameTab('Ocean', 'The ocean is blue', new Map()));
+game.tabs.set('ocean', new GameTab('Ocean', 'The ocean is blue', new Map([
+	['wet', new Button('Gather wet', 'gatherWet()')]
+])));
 
 // Milestones
 game.milestones.set('sandCastleUnlock', new Milestone('sandCastleUnlock',
@@ -88,7 +92,18 @@ game.milestones.set('sandCastleUnlock', new Milestone('sandCastleUnlock',
 	function () {
 		log('You have a little pile of sand. You could make a sandcastle out of it');
 		game.tabs.get('beach').buttons.get('sandcastle').makeVisible(true);
-	}));
+		this.unlocked = true;
+	})
+);
+
+game.milestones.set('tooMuchWet', new Milestone('tooMuchWet',
+	function () { return (game.resources.get('wet').amount >= 99); },
+	function () {
+		log('Ocean ran out');
+		game.tabs.get('ocean').buttons.get('wet').makeVisible(false);
+		this.unlocked = true;
+	})
+);
 
 /*
  *
@@ -132,14 +147,8 @@ document.addEventListener('DOMContentLoaded', function () {
  **********************************/
 
 function update() {
-	for (var [milestoneName, value] of game.milestones) {
-		var milestone = game.milestones.get(milestoneName);
-		if (!milestone.unlocked && milestone.test()) {
-			milestone.event();
-			milestone.unlocked = true;
-        }
-    }
 
+	checkMilestones();
 	updateUI();
 }
 
@@ -172,9 +181,17 @@ function updateUI() {
 				buttonValue.node.classList.add('locked');
 			}
 		}
-    }
+    }	
+}
 
-	
+function checkMilestones() {
+	for (var [milestoneName, value] of game.milestones) {
+		var milestone = game.milestones.get(milestoneName);
+		if (!milestone.unlocked && milestone.test()) {
+			milestone.event();
+			saveGame();
+        }
+    }
 }
 
 /*
@@ -187,6 +204,19 @@ function gatherButton() {
 	addResource('sand', 1);
 }
 
+function makeSandcastle() {
+	if (game.resources.get('sand').amount >= 10) {
+		addResource('sand', -10);
+		addResource('sandcastles', 1);
+	} else {
+		log('You need more sand');
+	}
+}
+
+function gatherWet() {
+	addResource('wet', 1);
+}
+
 /*
  * 
  * HELPER FUNCTIONS: RESOURCES
@@ -195,8 +225,12 @@ function gatherButton() {
 
 function addResource(resName, amount) {
 	var res = game.resources.get(resName);
+	if (!res.unlocked) {
+		unlockResource(resName);
+	}
 	res.amount += amount;
 
+	checkMilestones();
 	updateUI();
 	saveGame();
 }
@@ -409,11 +443,16 @@ function loadGame() {
 	}
 
 	game.tabs.get('beach').buttons.get('sand').makeVisible(true);
+	game.tabs.get('ocean').buttons.get('wet').makeVisible(true);
 }
 
 function debugReset() {
 	localStorage.removeItem('game');
+	game = {
+		tabs: new Map(), resources: new Map(), milestones: new Map(), debug: false, activeTab: null
+	};
 	loadGame();
 	game.debug = true;
 	saveGame();
+	updateUI();
 }
