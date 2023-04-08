@@ -13,7 +13,7 @@ var statusMsg;
  */
 
 var game = {
-		tabs: new Map(), resources: new Map(), milestones: new Map(), debug: false, activeTab: null
+		tabs: new Map(), resources: new Map(), milestones: new Map(), globals: new Map(), debug: false, activeTab: null
 	};
 
 
@@ -23,6 +23,7 @@ function GameTab(name, text, buttons) {
 	this.buttons = buttons;
 	this.unlocked = false;
 	this.tabNode = null;
+	this.textNode = null;
 	this.paneNode = null;
 }
 
@@ -63,11 +64,12 @@ function Button(text, func, enableTest = function () { return true; }) {
 	}
 }
 
-function Milestone(name, test, event) {
+function Milestone(name, test, event, checkOnLoad) {
 	this.name = name;
 	this.test = test;
 	this.event = event;
-	this.unlocked = false;
+	this.active = false;
+	this.checkOnLoad = checkOnLoad;
 }
 
 /*******************************************
@@ -99,8 +101,8 @@ game.milestones.set('sandCastleUnlock', new Milestone('sandCastleUnlock',
 	function () {
 		log('You have a little pile of sand. You could make a sandcastle out of it');
 		game.tabs.get('beach').buttons.get('sandcastle').makeVisible(true);
-		this.unlocked = true;
-	})
+		this.active = false;
+	}, false)
 );
 
 game.milestones.set('tooMuchWet', new Milestone('tooMuchWet',
@@ -108,9 +110,21 @@ game.milestones.set('tooMuchWet', new Milestone('tooMuchWet',
 	function () {
 		log('Ocean ran out');
 		game.tabs.get('ocean').buttons.get('wet').makeVisible(false);
-		this.unlocked = true;
-	})
+		game.globals.set('oceanDrained', true);
+		this.active = false;
+	}, false)
 );
+
+game.milestones.set('oceanDrained', new Milestone('oceanDrained',
+	function () { return (game.globals.get('oceanDrained')); },
+	function () {
+		game.tabs.get('ocean').textNode.textContent = "The ocean is blue and dry";
+		this.active = false;
+	}, true)
+);
+
+// Globals
+game.globals.set('oceanDrained', false);
 
 /*
  *
@@ -199,7 +213,7 @@ function updateUI() {
 function checkMilestones() {
 	for (var [milestoneName, value] of game.milestones) {
 		var milestone = game.milestones.get(milestoneName);
-		if (!milestone.unlocked && milestone.test()) {
+		if (milestone.active && milestone.test()) {
 			milestone.event();
 			saveGame();
         }
@@ -316,7 +330,14 @@ function createTabDisplay(tabName) {
 	newTabPane.classList.add('pane');
 	newTabPane.classList.add('locked');
 	newTabPane.setAttribute('id', tabName);
-	newTabPane.innerText = tab.text;
+
+	// Text description
+	var tabText = document.createElement('div');
+	tabText.classList.add('tab-text');
+	tabText.innerText = tab.text;
+	newTabPane.appendChild(tabText);
+
+	tab.textNode = tabText;
 
 	// Add buttons
 	var buttonDiv = document.createElement('div');
@@ -379,7 +400,7 @@ function log(msg, debug = false) {
  */
 
 function saveGame() {
-	var saveData = {resources : {}, tabs: {}, buttons: {}, milestones: {}, activeTab: null , debug: false}
+	var saveData = {resources : {}, tabs: {}, buttons: {}, milestones: {}, globals: {}, activeTab: null , debug: false}
 	for (const [key, value] of game.resources) {
 		saveData.resources[key] = [value.amount, value.unlocked];
 	}
@@ -391,8 +412,13 @@ function saveGame() {
 		}
 	}
 	for (const [key, value] of game.milestones) {
-		saveData.milestones[key] =  [value.unlocked];
+		saveData.milestones[key] =  [value.active];
     }
+
+	for (const [key, value] of game.globals) {
+		saveData.globals[key] = value;
+	}
+
 	saveData.activeTab = game.activeTab;
 
 	saveData.debug = game.debug;
@@ -432,9 +458,20 @@ function loadGame() {
 			game.tabs.get(saveData.buttons[button][0]).buttons.get(button).visible = saveData.buttons[button][1];
 		}
 
-		// Milestones [unlocked]
+		// Globals [value]
+		for (const global in saveData.globals) {
+			game.globals.set(global, saveData.globals[global]); 
+		}
+
+		// Milestones [active]
 		for (const milestone in saveData.milestones) {
-			game.milestones.get(milestone).unlocked = saveData.milestones[milestone][0];
+			var curMilestone = game.milestones.get(milestone);
+			curMilestone.active = saveData.milestones[milestone][0];
+			
+			// Some need to be checked when we load the game.
+			if (curMilestone.checkOnLoad && curMilestone.test()) {
+				curMilestone.event();
+			}
 		}
 
 		// Debug mode
@@ -452,10 +489,10 @@ function loadGame() {
 		unlockTab('ocean');
 
 		switchTab('beach');
-	}
 
-	game.tabs.get('beach').buttons.get('sand').makeVisible(true);
-	game.tabs.get('ocean').buttons.get('wet').makeVisible(true);
+		game.tabs.get('beach').buttons.get('sand').makeVisible(true);
+		game.tabs.get('ocean').buttons.get('wet').makeVisible(true);
+	}
 }
 
 function debugReset() {
@@ -474,7 +511,11 @@ function debugReset() {
 	}
 
 	for (const[key, value] of game.milestones) {
-		value.unlocked = false;
+		value.active = true;
+	}
+
+	for (const[key, value] of game.globals) {
+		game.globals.set(key, false);
 	}
 
 	loadGame();
