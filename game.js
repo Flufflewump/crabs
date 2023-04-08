@@ -13,8 +13,8 @@ var statusMsg;
  */
 
 var game = {
-	tabs: new Map(), resources: new Map(), milestones: new Map(), debug: false, activeTab: null
-};
+		tabs: new Map(), resources: new Map(), milestones: new Map(), debug: false, activeTab: null
+	};
 
 
 function GameTab(name, text, buttons) {
@@ -69,6 +69,13 @@ function Milestone(name, test, event) {
 	this.event = event;
 	this.unlocked = false;
 }
+
+/*******************************************
+ *                                         *
+ *                GAME DATA                *
+ * 		all of the "stuff" goes here       *
+ *                                         *
+ *******************************************/
 
 // Create all the resources
 game.resources.set('sand', new Resource('Sand'));
@@ -177,6 +184,11 @@ function updateUI() {
 		for (const [buttonKey, buttonValue] of tabValue.buttons) {
 			if (buttonValue.visible) {
 				buttonValue.node.classList.remove('locked');
+				if (buttonValue.enableTest()) {
+					buttonValue.node.classList.remove('disabled');
+				} else {
+					buttonValue.node.classList.add('disabled');
+				}
 			} else {
 				buttonValue.node.classList.add('locked');
 			}
