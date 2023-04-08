@@ -84,7 +84,6 @@ game.resources.set('sand', new Resource('Sand'));
 game.resources.set('rocks', new Resource('Rocks'));
 game.resources.set('wet', new Resource('Wet'));
 game.resources.set('sandcastles', new Resource('Sandcastles'));
-game.resources.set('magic', new Resource('Magic'));
 
 // And the tabs
 game.tabs.set('beach', new GameTab('Beach', 'Sand and rocks line the beach', new Map([
