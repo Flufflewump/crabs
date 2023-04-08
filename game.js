@@ -448,9 +448,23 @@ function loadGame() {
 
 function debugReset() {
 	localStorage.removeItem('game');
-	game = {
-		tabs: new Map(), resources: new Map(), milestones: new Map(), debug: false, activeTab: null
-	};
+	
+	for (const[key, value] of game.resources) {
+		value.amount = 0;
+		value.unlocked = 0;
+	}
+
+	for (const[tabKey, tabValue] of game.tabs) {
+		tabValue.unlocked = 0;
+		for (const[buttonKey, buttonValue] of tabValue.buttons) {
+			buttonValue.visible = false;
+		}
+	}
+
+	for (const[key, value] of game.milestones) {
+		value.unlocked = false;
+	}
+
 	loadGame();
 	game.debug = true;
 	saveGame();
