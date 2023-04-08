@@ -1,13 +1,19 @@
 //@ts-check
 
 var game = {
-	tabs: {}, resources: {}, debug: false, activeTab: null};
+	tabs: new Map(), resources: new Map(), milestones: new Map(), debug: false, activeTab: null};
 
 var msgLog;
 var resourceList;
 var tabList;
 var paneList;
 var statusMsg;
+
+/*
+ * 
+ * Object Definitions
+ * 
+ */
 
 function GameTab(name, text, buttons) {
 	this.name = name;
@@ -34,22 +40,64 @@ Resource.prototype.toString = function () {
 	return this.name;
 }
 
-function Button(text, func) {
+function Button(text, func, enableTest = function () { return true; }) {
 	this.text = text;
 	this.func = func;
+	this.node = null;
+	this.visible = false;
+	this.enableTest = enableTest;
+
+	this.makeVisible = function(vis) {
+		if (this.visible != vis) {
+			this.visible = vis;
+			if (vis) {
+				// @ts-ignore
+				this.node.classList.remove('locked');
+			} else {
+				// @ts-ignore
+				this.node.classList.add('locked');
+            }
+		}
+	}
+}
+
+function Milestone(name, test, event) {
+	this.name = name;
+	this.test = test;
+	this.event = event;
+	this.unlocked = false;
 }
 
 // Create all the resources
-game.resources['sand'] = new Resource('Sand');
-game.resources['rocks'] = new Resource('Rocks');
-game.resources['magic'] = new Resource('Magic');
-console.log('Resource list:');
-console.log(game.resources);
+game.resources.set('sand', new Resource('Sand'));
+game.resources.set('rocks', new Resource('Rocks'));
+game.resources.set('magic', new Resource('Magic'));
 
 // And the tabs
-game.tabs['beach'] = new GameTab('Beach', 'Sand and rocks line the beach', [new Button('Gather sand', 'gatherButton()')]);
-game.tabs['ocean'] = new GameTab('Ocean', 'The ocean is blue', []);
+game.tabs.set('beach', new GameTab('Beach', 'Sand and rocks line the beach', new Map([
+	['sand', new Button('Gather sand', 'gatherButton()')],
+	['sandcastle', new Button('Make sandcastle', 'makeSandcastle()', function () { return (game.resources.get('sand').amount >= 10) })]
+]) ));
+game.tabs.set('ocean', new GameTab('Ocean', 'The ocean is blue', new Map()));
 
+// Milestones
+game.milestones.set('sandCastleUnlock', new Milestone('sandCastleUnlock',
+	function () { log('checking to unlock sandcastles', true); return ( game.resources.get('sand').amount >= 10); },
+	function () {
+		log('You have a little pile of sand. You could make a sandcastle out of it');
+		game.tabs.get('beach').buttons.get('castle').makeVisible(true);
+	}));
+
+/*
+ * 
+ * --------------------------------
+ * 
+ *	CONTENT LOADED AND GAME LOOP
+ * 
+ * --------------------------------
+ * 
+ * 
+ */
 
 document.addEventListener('DOMContentLoaded', function () {
 	msgLog = document.getElementById('log');
@@ -59,14 +107,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	statusMsg.innerText = "You are a crab.";
 
-	for (var res in game.resources) {
-		createResourceDisplay(res);
+	for (const [key, value] of game.resources) {
+		createResourceDisplay(key);
 	}
 
-	for (var tab in game.tabs) {
-		createTabDisplay(tab);
+	for (const [key, value] of  game.tabs) {
+		createTabDisplay(key);
     }
-	
+
+	setInterval(update, 100);
 
 	loadGame();
 	saveGame();
@@ -74,6 +123,16 @@ document.addEventListener('DOMContentLoaded', function () {
 	log('Loaded game!');
 	log('Debug mode is ' + (game.debug ? 'enabled' : 'disabled'), true);
 });
+
+function update() {
+	for (var [milestoneName, value] of game.milestones) {
+		var milestone = game.milestones.get(milestoneName);
+		if (!milestone.unlocked && milestone.test()) {
+			milestone.event();
+			milestone.unlocked = true;
+        }
+    }
+}
 
 /*
  * 
@@ -86,29 +145,33 @@ function gatherButton() {
 }
 
 function loadGame() {
-
+	//localStorage.removeItem('game');
 	const gameStr = localStorage.getItem('game');
 
 	var tempGame
 	if (gameStr !== null) {
 		tempGame = JSON.parse(gameStr);
+		tempGame.resources = arrayToMap(tempGame.resources);
+		tempGame.tabs = arrayToMap(tempGame.tabs);
+		tempGame.milestones = arrayToMap(tempGame.milestones);
+
 
 		// Set up all the stuff from the save
 		game.debug = tempGame.debug;
-		for (var resName in tempGame.resources) {
-			if (!tempGame.resources[resName].unlocked) {
+		for (const [resName, value] of tempGame.resources) {
+			if (!value.unlocked) {
 				continue;
             }
 
-			if (game.resources[resName] == null) {
+			if (game.resources.get(resName) == null) {
 				log('Attempted to load non-existant resource ' + resName, true);
             }
 			log('LOAD: unlocking ' + resName, true);
 			unlockResource(resName);
-			log('LOAD: adding ' + tempGame.resources[resName].amount, true);
-			addResource(resName, tempGame.resources[resName].amount);
+			log('LOAD: adding ' + value.amount, true);
+			addResource(resName, value.amount);
 		}
-		for (var tab in tempGame.tabs) {
+		for (var [tab, value] of tempGame.tabs) {
 			unlockTab(tab);
 		}
 
@@ -122,6 +185,7 @@ function loadGame() {
 
 		switchTab('beach');
 	}
+	game.tabs.get('beach').buttons.get('sand').makeVisible(true);
 }
 
 /*
@@ -129,7 +193,7 @@ function loadGame() {
  */
 
 function addResource(resName, amount) {
-	var res = game.resources[resName];
+	var res = game.resources.get(resName);
 	res.amount += amount;
 
 	res.amountNode.innerText = res.amount;
@@ -138,9 +202,7 @@ function addResource(resName, amount) {
 }
 
 function createResourceDisplay(resName) {
-	var res = game.resources[resName];
-
-	log('Building resource display: ' + res, true);
+	var res = game.resources.get(resName);
 
 	var newResource = document.createElement('li');
 	newResource.classList.add('resource');
@@ -156,6 +218,8 @@ function createResourceDisplay(resName) {
 	res.displayNode = newResource;
 	res.amountNode = newAmountNode;
 
+	log(res.displayNode);
+
 	//Put it all together
 	newResource.innerText = res.name + ': ';
 	newResource.appendChild(newAmountNode);
@@ -164,7 +228,7 @@ function createResourceDisplay(resName) {
 }
 
 function unlockResource(resName) {
-	var res = game.resources[resName];
+	var res = game.resources.get(resName);
 	res.unlocked = true;
 	res.displayNode.classList.remove('locked');
 
@@ -178,15 +242,14 @@ function unlockResource(resName) {
  */
 
 function switchTab(tabName) {
-	log('Switching to tab ' + tabName, true);
 	game.activeTab = tabName;
 
-	var tab = game.tabs[tabName];
+	var tab = game.tabs.get(tabName);
 
 
-	for (var curTab in game.tabs) {
-		game.tabs[curTab].tabNode.classList.remove('active');
-		game.tabs[curTab].paneNode.classList.remove('active');
+	for (var [curTab, value] of game.tabs) {
+		game.tabs.get(curTab).tabNode.classList.remove('active');
+		game.tabs.get(curTab).paneNode.classList.remove('active');
 	}
 	tab.tabNode.classList.add('active');
 	tab.paneNode.classList.add('active');
@@ -195,9 +258,7 @@ function switchTab(tabName) {
 }
 
 function createTabDisplay(tabName) {
-	var tab = game.tabs[tabName];
-
-	log('Building tab display: ' + tab, true);
+	var tab = game.tabs.get(tabName);
 
 	// Tab at top of pane
 	var newTab = document.createElement('span');
@@ -219,11 +280,16 @@ function createTabDisplay(tabName) {
 	buttonDiv.classList.add('button-list');
 	newTabPane.appendChild(buttonDiv);
 
-	for (const button of tab.buttons) {
+	for (var [buttonName, value] of tab.buttons) {
+		var button = tab.buttons.get(buttonName);
+
 		var newButton = document.createElement('button');
-		console.log(button.func);
+		newButton.classList.add('locked');
 		newButton.setAttribute('onclick', button.func);
 		newButton.innerText = (button.text);
+
+		button.node = newButton;
+
 		buttonDiv.appendChild(newButton);
     }
 
@@ -238,7 +304,7 @@ function createTabDisplay(tabName) {
 }
 
 function unlockTab(name) {
-	var tab = game.tabs[name];
+	var tab = game.tabs.get(name);
 
 	tab.unlocked = true;
 	tab.tabNode.classList.remove('locked');
@@ -260,5 +326,22 @@ function log(msg, debug = false) {
 }
 
 function saveGame() {
-	localStorage.setItem('game', JSON.stringify(game));
+
+	// de-map the maps
+	const jsonString = JSON.stringify(game, (key, value) => {
+		if (value instanceof Map) {
+			return [...value];
+		}
+		return value;
+	});
+
+	localStorage.setItem('game', jsonString);
+}
+
+function arrayToMap(array) {
+	const map = new Map();
+	array.forEach(([key, value]) => {
+		map.set(key, value);
+	});
+	return map;
 }
