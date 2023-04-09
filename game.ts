@@ -11,7 +11,9 @@ var statusMsg;
  */
 
 var game = {
-		tabs: new Map(), resources: new Map(), milestones: new Map(), globals: new Map(), debug: false, activeTab: null
+		tabs: new Map<string, GameTab>(), resources: new Map<string, Resource>(), 
+		milestones: new Map<string, Milestone>(), buildings: new Map<string, Building>(), 
+		globals: new Map<string, any>(), debug: false, activeTab: null
 	};
 
 class GameTab {
@@ -19,9 +21,9 @@ class GameTab {
 	text: string;
 	buttons: Map<string, Button>;
 	visible: boolean;
-	tabNode: Node;
-	textNode: Node;
-	paneNode: Node;
+	tabNode: HTMLElement;
+	textNode: HTMLElement;
+	paneNode: HTMLElement;
 
 	constructor(name: string, text: string, buttons: Map<string, Button>) {
 		this.name = name;
@@ -40,8 +42,8 @@ class Resource {
 	name: string;
 	singularName: string;
 	amount: number;
-	displayNode: Node;
-	amountNode: Node;
+	displayNode: HTMLElement;
+	amountNode: HTMLElement;
 	visible: boolean;
 
 	constructor(name: string, singularName: string) {
@@ -59,7 +61,7 @@ class Resource {
 class Button {
 	text: string;
 	func: string;
-	node: Node;
+	node: HTMLElement;
 	visible: boolean;
 	enableTest: Function;
 	price: Price;
@@ -92,11 +94,15 @@ class Milestone {
 // May not really be a building, I just needed a name for "thing that ticks every tick"
 class Building {
 	name: string;
+	singularName: string;
 	update: Function;
+	amount: number;
 
-	constructor(name: string, update: Function) {
+	constructor(name: string, singularName: string, update: Function) {
 		this.name = name;
+		this.singularName = singularName;
 		this.update = update;
+		this.amount = 0;
 	}
 }
 
@@ -123,7 +129,7 @@ class ResourceCost {
 class Price {
 	costs: Array<ResourceCost>;
 	iterations: Function;
-	displayNode: Node;
+	displayNode: HTMLElement;
 
 	constructor(costs: Array<ResourceCost>, iterations: Function = () => {return 0}) {
 		this.costs = costs;
@@ -183,26 +189,32 @@ game.resources.set('sand', new Resource('Sand', 'Sand'));
 game.resources.set('rocks', new Resource('Rocks', 'Rock'));
 game.resources.set('wet', new Resource('Wet', 'Wet'));
 game.resources.set('sandcastles', new Resource('Sandcastles', 'Sandcastle'));
+game.resources.set('crabs', new Resource('Crabs', 'Crab'));
 
 // Prices
 let prices = {
 	sandcastle: new Price([
-		new ResourceCost(game.resources.get('sand'), 10, (input: number) => {return input**1.01})], 
+		new ResourceCost(game.resources.get('sand'), 10, constantPrice)], 
 			() => game.resources.get('sandcastles').amount),
 	fancySandcastle: new Price(
 		[new ResourceCost(game.resources.get('sand'), 20, constantPrice),
 		new ResourceCost(game.resources.get('rocks'), 2, constantPrice),
 		new ResourceCost(game.resources.get('sandcastles'), 4, constantPrice)]),
 
-	bucket: new Price([new ResourceCost(game.resources.get('sandcastles'), 20, constantPrice)])
+	bucket: new Price([new ResourceCost(game.resources.get('sandcastles'), 20, constantPrice)]),
+
+	room: new Price([
+		new ResourceCost(game.resources.get('sand'), 5, (input:number) => {return game.buildings.get('crabs').amount})
+	])
 }
-
-
 
 // Cost increment functions
 function constantPrice(input) {
 	return input;
 }
+
+// Buildings
+game.buildings.set('crabs', new Building('Crabs', 'Crab', crabTick))
 
 // And the tabs
 game.tabs.set('beach', new GameTab('Beach', 'Sand and rocks line the beach', new Map([
@@ -278,6 +290,7 @@ game.milestones.set('boughtBucket', new Milestone('boughtBucket',
 // Globals
 game.globals.set('oceanDrained', false);
 game.globals.set('bucket', false);
+game.globals.set('fancySandcastle', false);
 
 
 /*
@@ -285,6 +298,8 @@ game.globals.set('bucket', false);
  *	       CONTENT LOADED
  * 
  */
+
+let gameLoop;
 
 document.addEventListener('DOMContentLoaded', function () {
 	msgLog = document.getElementById('log');
@@ -312,7 +327,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		createTabDisplay(key);
     }
 
-	setInterval(update, 100);
+	gameLoop = setInterval(update, 100);
 
 	loadGame();
 	saveGame();
@@ -331,7 +346,9 @@ document.addEventListener('DOMContentLoaded', function () {
  **********************************/
 
 function update() {
-
+	for (const [key, building] of game.buildings) {
+		building.update();
+	}
 	checkMilestones();
 	updateUI();
 }
@@ -342,7 +359,7 @@ function updateUI() {
 		if (resourceValue.visible) {
 			resourceValue.displayNode.classList.remove('locked');
 			// Update displayed amount
-			resourceValue.amountNode.innerText = resourceValue.amount;
+			resourceValue.amountNode.innerText = resourceValue.amount.toString();
         } else {
 			resourceValue.displayNode.classList.add('locked');
 		}
@@ -431,9 +448,24 @@ function buyBucket() {
 
 function makeFancySandcastle() {
 	if (prices.fancySandcastle.spend()) {
-		// TODO: Fancy sandcastles!
-		log('You built a fancy sandcastle. It doesn\'t do anyting yet.');
+		log('A friendly crab moves into the fancy sandcastle and begins adding sand to your pile');
+		game.buildings.get('crabs').amount += 1;
+		unlockResource('crabs');
+		addResourceName('crabs', 1);
+		// TODO: This should get disabled afterwords. Do that after overhauling how visibility is stored (again)
 	}
+}
+
+/********************************************
+ *                                          *
+ *                                          *
+ *           BUILDING FUNCTIONS             *
+ *                                          *
+ *                                          *
+ *******************************************/
+
+function crabTick() {
+	addResourceName('sand', game.buildings.get('crabs').amount);
 }
 
 /*
@@ -465,7 +497,7 @@ function createResourceDisplay(resName) {
 	// This is where the amount of the resource will be displayed
 	var newAmountNode = document.createElement('span');
 	newAmountNode.classList.add('resource-number');
-	newAmountNode.innerText = res.amount;
+	newAmountNode.innerText = res.amount.toString();
 
 	// Keep it in game.resources so it can be updated
 	res.displayNode = newResource;
@@ -548,7 +580,7 @@ function createTabDisplay(tabName) {
 		if (button.price != null) {
 			var priceDisplay = document.createElement('div');
 			priceDisplay.classList.add('button-price');
-			priceDisplay.textContent = button.price;
+			priceDisplay.textContent = button.price.toString();
 			button.price.displayNode = priceDisplay;
 			newButton.appendChild(priceDisplay);
 		}
@@ -600,9 +632,12 @@ function log(msg, debug = false) {
  */
 
 function saveGame() {
-	var saveData = {resources : {}, tabs: {}, buttons: {}, milestones: {}, globals: {}, activeTab: null , debug: false}
+	var saveData = {resources : {}, buildings : {}, tabs: {}, buttons: {}, milestones: {}, globals: {}, activeTab: null , debug: false}
 	for (const [key, value] of game.resources) {
 		saveData.resources[key] = [value.amount, value.visible];
+	}
+	for (const [key, value] of game.buildings) {
+		saveData.buildings[key] = [value.amount];
 	}
 	for (const [key, value] of game.tabs) {
 		saveData.tabs[key] = [value.visible];
@@ -646,6 +681,10 @@ function loadGame() {
 		for (const res in saveData.resources) {
 			game.resources.get(res).visible = saveData.resources[res][1];
 			game.resources.get(res).amount = saveData.resources[res][0];
+		}
+
+		for (const building in saveData.buildings) {
+			game.buildings.get(building).amount = saveData.buildings[building][0];
 		}
 
 		// Tabs [visible]
@@ -699,6 +738,7 @@ function loadGame() {
 }
 
 function debugReset() {
+	clearInterval(gameLoop);
 	localStorage.removeItem('game');
 	location.reload();
 }
