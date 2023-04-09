@@ -16,10 +16,6 @@ header {
     margin: .5em;
 }
 
-#status {
-
-}
-
 h1 {
     margin: 0;
 }
@@ -49,10 +45,6 @@ aside {
 
 h3 {
     margin: 0 5px .5em 0px;
-}
-
-.resource {
-    
 }
 
 main {
@@ -125,6 +117,8 @@ main {
 
 .button-list {
     padding: 1em 0;
+    display: flex;
+    align-items: flex-start;
 }
 
 button {
@@ -138,10 +132,19 @@ button {
     border: 2px solid #222;
     border-radius: 10px;
 }
-    button.disabled {
-        background-color: #333;
-        color: #ddd;
+     button.disabled {
+        background-color: #bbb;
+        color: #222;
     }
+
+.button-price {
+    font-size: .9em;
+    color: #333;
+}
+
+button.disabled .button-price {
+    color: #888;
+}
 
 .locked {
     display: none;
