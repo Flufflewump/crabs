@@ -23,17 +23,18 @@ class GameTab {
     }
 }
 class Resource {
-    constructor(name) {
+    constructor(name, singularName) {
         this.toString = () => {
             return this.name;
         };
         this.name = name;
+        this.singularName = singularName;
         this.amount = 0;
         this.visible = false;
     }
 }
 class Button {
-    constructor(text, func, enableTest = function () { return true; }, price = '') {
+    constructor(text, func, enableTest = function () { return true; }, price = null) {
         this.text = text;
         this.price = price;
         this.func = func;
@@ -51,32 +52,64 @@ class Milestone {
     }
 }
 // May not really be a building, I just needed a name for "thing that ticks every tick"
-function Building(name, update, modifiers) {
-    this.name = name;
-    this.update = update;
-    this.modifiers = modifiers;
+class Building {
+    constructor(name, update) {
+        this.name = name;
+        this.update = update;
+    }
 }
-// Price gets its own object because they've got behaviour in common. Maybe I'm just too into JS's OOP bullshit.
-function Price(initial, increaseFunc) {
-    this.initial = initial;
-    this.iterations = 0;
-    this.increaseFunc = increaseFunc;
-    this.displayNode = null;
-    this.get = function () {
-        var tempPrice = initial;
-        for (var i = 0; i < this.iterations; i++) {
-            tempPrice = increaseFunc(tempPrice);
+class ResourceCost {
+    constructor(resource, initial, increment) {
+        this.resource = resource;
+        this.initial = initial;
+        this.increment = increment;
+    }
+    calculate(iterations) {
+        var tempPrice = this.initial;
+        for (var i = 0; i < iterations; i++) {
+            tempPrice = this.increment(tempPrice);
         }
-        return tempPrice;
-    };
-    this.increment = function (times = 1) {
-        this.iterations += times;
-        this.displayNode.innerText = this.get();
-    };
-    this.setIterations = function (value) {
-        this.iterations = value;
-        this.displayNode.innerText = this.get();
-    };
+        return Math.floor(tempPrice);
+    }
+}
+class Price {
+    constructor(costs, iterations = () => { return 0; }) {
+        this.costs = costs;
+        this.iterations = iterations;
+    }
+    toString() {
+        let outString = '';
+        for (var cost of this.costs) {
+            let curCost = cost.calculate(this.iterations());
+            outString += curCost + ' ' + (curCost == 1 ? cost.resource.singularName : cost.resource.name) + ', ';
+        }
+        outString = outString.slice(0, -2);
+        return outString;
+    }
+    canAfford() {
+        for (const curCost of this.costs) {
+            if (curCost.resource.amount < curCost.calculate(this.iterations())) {
+                return false;
+            }
+        }
+        return true;
+    }
+    spend() {
+        if (this.canAfford()) {
+            for (const curCost of this.costs) {
+                addResource(curCost.resource, -curCost.calculate(this.iterations()));
+            }
+            return true;
+        }
+        else {
+            return false;
+        }
+    }
+    updateNode() {
+        if (this.displayNode != null) {
+            this.displayNode.textContent = this.toString();
+        }
+    }
 }
 /*******************************************
  *                                         *
@@ -85,23 +118,36 @@ function Price(initial, increaseFunc) {
  *                                         *
  *******************************************/
 // Create all the resources
-game.resources.set('sand', new Resource('Sand'));
-game.resources.set('rocks', new Resource('Rocks'));
-game.resources.set('wet', new Resource('Wet'));
-game.resources.set('sandcastles', new Resource('Sandcastles'));
+game.resources.set('sand', new Resource('Sand', 'Sand'));
+game.resources.set('rocks', new Resource('Rocks', 'Rock'));
+game.resources.set('wet', new Resource('Wet', 'Wet'));
+game.resources.set('sandcastles', new Resource('Sandcastles', 'Sandcastle'));
+// Prices
+let prices = {
+    sandcastle: new Price([
+        new ResourceCost(game.resources.get('sand'), 10, (input) => { return input ** 1.01; })
+    ], () => game.resources.get('sandcastles').amount),
+    fancySandcastle: new Price([new ResourceCost(game.resources.get('sand'), 20, constantPrice),
+        new ResourceCost(game.resources.get('rocks'), 2, constantPrice),
+        new ResourceCost(game.resources.get('sandcastles'), 4, constantPrice)]),
+    bucket: new Price([new ResourceCost(game.resources.get('sandcastles'), 20, constantPrice)])
+};
+// Cost increment functions
+function constantPrice(input) {
+    return input;
+}
 // And the tabs
 game.tabs.set('beach', new GameTab('Beach', 'Sand and rocks line the beach', new Map([
     ['sand', new Button('Gather sand', 'gatherButton()')],
     ['cheat', new Button('Cheat!', 'cheat()')],
-    ['sandcastle', new Button('Make sandcastle', 'makeSandcastle()', function () {
-            return (game.resources.get('sand').amount >= 10);
-        }, '10 Sand')]
+    ['sandcastle', new Button('Build sandcastle', 'makeSandcastle()', () => { return prices.sandcastle.canAfford(); }, prices.sandcastle)],
+    ['fancySandcastle', new Button('Build fancy sandcastle', 'makeFancySandcastle()', () => { return prices.fancySandcastle.canAfford(); }, prices.fancySandcastle)]
 ])));
 game.tabs.set('ocean', new GameTab('Ocean', 'The ocean is blue', new Map([
     ['wet', new Button('Gather wet', 'gatherWet()')]
 ])));
 game.tabs.set('crabitalist', new GameTab('Crabitalist', 'The crabitalist wishes to buy and sell your goods', new Map([
-    ['buyBucket', new Button('Buy a bucket', 'buyBucket()', function () { return (!game.globals.get('bucket') && game.resources.get('sandcastles').amount >= 20); }, '20 Sandcastles')]
+    ['buyBucket', new Button('Buy bucket', 'buyBucket()', function () { return (!game.globals.get('bucket') && prices.bucket.canAfford()); }, prices.bucket)]
 ])));
 // Milestones
 game.milestones.set('sandCastleUnlock', new Milestone('sandCastleUnlock', function () { return (game.resources.get('sand').amount >= 10); }, function () {
@@ -128,13 +174,14 @@ game.milestones.set('unlockCrabitalist', new Milestone('unlockCrabitalist', func
     game.tabs.get('crabitalist').visible = true;
     game.tabs.get('crabitalist').buttons.get('buyBucket').visible = true;
     this.active = false;
-}));
-game.milestones.set('hideCrabitalist', new Milestone('hideCrabitalist', function () { return (game.globals.get('bucket')); }, function () {
+}, false));
+game.milestones.set('boughtBucket', new Milestone('boughtBucket', function () { return (game.globals.get('bucket')); }, function () {
     log('The crabitalist has fled!');
     game.tabs.get('crabitalist').visible = false;
+    game.tabs.get('beach').buttons.get('fancySandcastle').visible = true;
     switchTab('beach');
     this.active = false;
-}));
+}, false));
 // Globals
 game.globals.set('oceanDrained', false);
 game.globals.set('bucket', false);
@@ -148,6 +195,13 @@ document.addEventListener('DOMContentLoaded', function () {
     resourceList = document.getElementById('resources');
     tabList = document.getElementById('tabs');
     statusMsg = document.getElementById('status');
+    // ENABLE DEBUG MODE
+    document.addEventListener('keypress', (event) => {
+        if (event.key == 'd') {
+            game.debug = !game.debug;
+            log('Debug mode ' + (game.debug ? 'enabled' : 'disabled'));
+        }
+    });
     statusMsg.innerText = "You are a crab.";
     for (const [key, value] of game.resources) {
         createResourceDisplay(key);
@@ -207,6 +261,10 @@ function updateUI() {
                 buttonValue.node.classList.add('locked');
             }
         }
+        // Prices
+        for (const price in prices) {
+            prices[price].updateNode();
+        }
     }
 }
 function checkMilestones() {
@@ -226,43 +284,48 @@ function checkMilestones() {
  *                                          *
  *******************************************/
 function cheat() {
-    addResource('sand', 1000);
+    addResourceName('sand', 1000);
 }
 function gatherButton() {
-    addResource('sand', 1);
+    addResourceName('sand', 1);
     if (Math.random() < (1 / 244)) {
-        addResource('rocks', 1);
+        addResourceName('rocks', 1);
         log('You found a cool rock in the sand');
     }
 }
 function makeSandcastle() {
-    if (game.resources.get('sand').amount >= 10) {
-        addResource('sand', -10);
-        addResource('sandcastles', 1);
+    if (prices.sandcastle.spend()) {
+        unlockResource('sandcastles');
+        addResourceName('sandcastles', 1);
     }
 }
 function gatherWet() {
-    addResource('wet', 1);
+    unlockResource('wet');
+    addResourceName('wet', 1);
 }
 function buyBucket() {
-    if (game.resources.get('sandcastles').amount >= 20) {
-        addResource('sandcastles', -20);
+    if (prices.bucket.spend()) {
         log('You have acquired a bucket');
         game.tabs.get('crabitalist').buttons.get('buyBucket').visible = false;
         game.globals.set('bucket', true);
     }
     saveGame();
 }
+function makeFancySandcastle() {
+    if (prices.fancySandcastle.spend()) {
+        // TODO: Fancy sandcastles!
+        log('You built a fancy sandcastle. It doesn\'t do anyting yet.');
+    }
+}
 /*
  *
  * HELPER FUNCTIONS: RESOURCES
  *
  */
-function addResource(resName, amount) {
-    var res = game.resources.get(resName);
-    if (!res.visible) {
-        unlockResource(resName);
-    }
+function addResourceName(resName, amount) {
+    addResource(game.resources.get(resName), amount);
+}
+function addResource(res, amount) {
     res.amount += amount;
     checkMilestones();
     updateUI();
@@ -337,10 +400,11 @@ function createTabDisplay(tabName) {
         newButton.classList.add('locked');
         newButton.setAttribute('onclick', button.func);
         newButton.innerText = (button.text);
-        if (button.price != '') {
+        if (button.price != null) {
             var priceDisplay = document.createElement('div');
             priceDisplay.classList.add('button-price');
             priceDisplay.textContent = button.price;
+            button.price.displayNode = priceDisplay;
             newButton.appendChild(priceDisplay);
         }
         button.node = newButton;
@@ -460,25 +524,6 @@ function loadGame() {
 }
 function debugReset() {
     localStorage.removeItem('game');
-    for (const [key, value] of game.resources) {
-        value.amount = 0;
-        value.visible = 0;
-    }
-    for (const [tabKey, tabValue] of game.tabs) {
-        tabValue.visible = 0;
-        for (const [buttonKey, buttonValue] of tabValue.buttons) {
-            buttonValue.visible = false;
-        }
-    }
-    for (const [key, value] of game.milestones) {
-        value.active = true;
-    }
-    for (const [key, value] of game.globals) {
-        game.globals.set(key, false);
-    }
-    loadGame();
-    game.debug = true;
-    saveGame();
-    updateUI();
+    location.reload();
 }
 //# sourceMappingURL=game.js.map
