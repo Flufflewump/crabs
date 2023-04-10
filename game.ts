@@ -240,7 +240,7 @@ game.tabs.set('ocean', new GameTab('Ocean', 'The ocean is blue', new Map([
 	() => {return true}
 	));
 game.tabs.set('crabitalist', new GameTab('Crabitalist', 'The crabitalist wishes to buy and sell your goods', new Map([
-	['buyBucket', new Button('Buy bucket', 'buyBucket()', () => {return true}, function() {return (!game.globals.bucket && prices.bucket.canAfford())}, prices.bucket)]]),
+	['buyBucket', new Button('Buy bucket', 'buyBucket()', () => {return !game.globals.bucket}, function() {return (prices.bucket.canAfford())}, prices.bucket)]]),
 	
 	() => {return game.globals.crabitalist}
 	));
@@ -271,16 +271,6 @@ game.milestones.set('unlockCrabitalist', new Milestone('unlockCrabitalist',
 		this.active = false;
 	})
 );
-
-game.milestones.set('boughtBucket', new Milestone('boughtBucket',
-	function () { return (game.globals.bucket); },
-	function () {
-		log('The crabitalist has fled!');
-		switchTab('beach');
-		this.active = false;
-	})
-);
-
 
 /*
  *
@@ -381,12 +371,20 @@ function updateUI() {
 		for (const price in prices) {
 			prices[price].updateNode();
 		}
-    }	
+    }
+	
+	if (!game.tabs.get(game.activeTab).visibleTest()) {
+		for (const [tabName, tab] of game.tabs) {
+			if (tab.visibleTest()) {
+				switchTab(tabName);
+				break;
+			}
+		}
+	}
 }
 
 function checkMilestones() {
-	for (var [milestoneName, value] of game.milestones) {
-		var milestone = game.milestones.get(milestoneName);
+	for (var [key, milestone] of game.milestones) {
 		if (milestone.active && milestone.test()) {
 			milestone.event();
 			saveGame();
@@ -428,7 +426,9 @@ function gatherWet() {
 function buyBucket() {
 	if (prices.bucket.spend()) {
 		log('You have acquired a bucket');
+		log('The Crabitalist has fled!');
 		game.globals.bucket = true;
+		game.globals.crabitalist = false;
 	}
 	saveGame();
 }
@@ -443,6 +443,7 @@ function makeFancySandcastle() {
 
 		// TODO: This should get disabled afterwords. Do that after overhauling how visibility is stored (again)
 		// Globals work now. Woo. Now do it for buttons.
+		// Done. yay. I'm leaving these comments for sentimental reasons.
 	}
 }
 
@@ -511,10 +512,9 @@ function switchTab(tabName) {
 
 	var tab = game.tabs.get(tabName);
 
-
-	for (var [curTab, value] of game.tabs) {
-		game.tabs.get(curTab).tabNode.classList.remove('active');
-		game.tabs.get(curTab).paneNode.classList.remove('active');
+	for (const [tabName, tab] of game.tabs) {
+		tab.tabNode.classList.remove('active');
+		tab.paneNode.classList.remove('active');
 	}
 	tab.tabNode.classList.add('active');
 	tab.paneNode.classList.add('active');
@@ -664,10 +664,10 @@ function loadGame() {
 			var curMilestone = game.milestones.get(milestone);
 			curMilestone.active = saveData.milestones[milestone];
 		}
-
-		updateUI();
 		
 		switchTab(saveData.activeTab);
+
+		updateUI();
 
 	} else {
 		// No savegame, start from the beginning
