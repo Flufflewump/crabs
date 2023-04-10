@@ -322,6 +322,7 @@ game.milestones.set('unlockCrabitalist', new Milestone('unlockCrabitalist',
 let gameLoop;
 
 document.addEventListener('DOMContentLoaded', function () {
+	document.getElementById('no-js').classList.add('hidden');
 	msgLog = document.getElementById('log');
 	resourceList = document.getElementById('resources');
 	tabList = document.getElementById('tabs');
@@ -347,10 +348,12 @@ document.addEventListener('DOMContentLoaded', function () {
 		createTabDisplay(key);
     }
 
-	gameLoop = setInterval(update, 100);
-
 	loadGame();
 	saveGame();
+
+	gameLoop = setInterval(update, 100);
+	updateUI();
+	document.getElementById('load-screen').classList.add('hidden');
 
 	log('Loaded game!');
 	log('Debug mode is ' + (game.globals.debug ? 'enabled' : 'disabled'), true);
@@ -536,7 +539,6 @@ function createResourceDisplay(resName) {
 
 	var newResource = document.createElement('li');
 	newResource.classList.add('resource');
-	newResource.classList.add('hidden');
 	newResource.setAttribute('id', resName);
 
 	// This is where the amount of the resource will be displayed
@@ -582,7 +584,6 @@ function createTabDisplay(tabName) {
 	// Tab at top of pane
 	var newTab = document.createElement('span');
 	newTab.classList.add('tab');
-	newTab.classList.add('hidden');
 	newTab.setAttribute('onclick', 'switchTab(\'' + tabName + '\')');
 	newTab.setAttribute('id', tabName);
 	newTab.innerText = tab.name;
@@ -590,7 +591,6 @@ function createTabDisplay(tabName) {
 	// The pane itself
 	var newTabPane = document.createElement('div');
 	newTabPane.classList.add('pane');
-	newTabPane.classList.add('hidden');
 	newTabPane.setAttribute('id', tabName);
 
 	// Add html elements
