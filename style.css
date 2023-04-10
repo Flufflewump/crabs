@@ -150,7 +150,7 @@ button.disabled .button-price {
     color: #888;
 }
 
-.locked {
+.hidden {
     display: none;
 }
 

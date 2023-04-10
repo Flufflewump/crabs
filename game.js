@@ -20,14 +20,28 @@ var game = {
     }, activeTab: null
 };
 class GameTab {
-    constructor(name, text, buttons, visibleTest) {
+    constructor(name, visibleTest) {
         this.toString = () => {
             return this.name;
         };
         this.name = name;
-        this.text = text;
-        this.buttons = buttons;
         this.visibleTest = visibleTest;
+        this.elements = [];
+    }
+    addElement(element) {
+        this.elements.push(element);
+    }
+}
+class TabHtmlElement {
+    constructor(contents, visibleTest) {
+        this.visibleTest = visibleTest;
+        this.contents = contents;
+    }
+}
+class ButtonList {
+    constructor(contents, visibleTest) {
+        this.visibleTest = visibleTest;
+        this.contents = contents;
     }
 }
 class Resource {
@@ -43,7 +57,8 @@ class Resource {
     }
 }
 class Button {
-    constructor(text, func, visibleTest = () => { return true; }, enableTest = () => { return true; }, price = null) {
+    constructor(id, text, func, visibleTest = () => true, enableTest = () => { return true; }, price = null) {
+        this.id = id;
         this.text = text;
         this.price = price;
         this.func = func;
@@ -128,8 +143,8 @@ class Price {
  *                                         *
  *******************************************/
 // Create all the resources
-game.resources.set('sand', new Resource('Sand', 'Sand', () => { return true; }));
-game.resources.set('rocks', new Resource('Rocks', 'Rock', () => { return true; }));
+game.resources.set('sand', new Resource('Sand', 'Sand', () => true));
+game.resources.set('rocks', new Resource('Rocks', 'Rock', () => true));
 game.resources.set('wet', new Resource('Wet', 'Wet', () => { return game.resources.get('wet').amount >= 1; }));
 game.resources.set('sandcastles', new Resource('Sandcastles', 'Sandcastle', () => { return game.milestones.get('sandcastleUnlock').active == false; }));
 game.resources.set('crabs', new Resource('Crabs', 'Crab', () => { return game.globals.fancySandcastle; }));
@@ -152,21 +167,31 @@ function constantPrice(input) {
 }
 // Buildings
 game.buildings.set('crabs', new Building('Crabs', 'Crab', crabTick));
-//TODO: build these in a better way. Make the buttons, put them in the map, pass it to game.tabs.set()
-//		like building an HTMLElement
-// And the tabs
-game.tabs.set('beach', new GameTab('Beach', 'Sand and rocks line the beach', new Map([
-    ['sand', new Button('Gather sand', 'gatherButton()')],
-    ['cheat', new Button('Cheat!', 'cheat()', () => { return game.globals.debug; })],
-    ['sandcastle', new Button('Build sandcastle', 'makeSandcastle()', () => { return (!game.milestones.get('sandcastleUnlock').active); }, () => { return prices.sandcastle.canAfford(); }, prices.sandcastle)],
-    ['fancySandcastle', new Button('Build fancy sandcastle', 'makeFancySandcastle()', () => { return (game.globals.bucket && !game.globals.fancySandcastle); }, () => { return prices.fancySandcastle.canAfford(); }, prices.fancySandcastle)]
-]), () => { return true; }));
-game.tabs.set('ocean', new GameTab('Ocean', 'The ocean is blue', new Map([
-    ['wet', new Button('Gather wet', 'gatherWet()', () => { return (!game.globals.oceanDrained); })]
-]), () => { return true; }));
-game.tabs.set('crabitalist', new GameTab('Crabitalist', 'The crabitalist wishes to buy and sell your goods', new Map([
-    ['buyBucket', new Button('Buy bucket', 'buyBucket()', () => { return !game.globals.bucket; }, function () { return (prices.bucket.canAfford()); }, prices.bucket)]
-]), () => { return game.globals.crabitalist; }));
+/*******************
+ *      TABS       *
+ * *****************/
+let beachTab = new GameTab('Beach', () => true);
+game.tabs.set('beach', beachTab);
+beachTab.addElement(new TabHtmlElement('Sand and rocks line the beach.', () => true));
+beachTab.addElement(new ButtonList([
+    new Button('gather-sand', 'Gather sand', 'gatherButton()'),
+    new Button('cheat', 'Cheat!', 'cheat()', () => { return game.globals.debug; }),
+    new Button('build-sandcastle', 'Build sandcastle', 'makeSandcastle()', () => { return (!game.milestones.get('sandcastleUnlock').active); }, () => prices.sandcastle.canAfford(), prices.sandcastle),
+    new Button('build-fancy-castle', 'Build fancy sandcastle', 'makeFancySandcastle()', () => { return (game.globals.bucket && !game.globals.fancySandcastle); }, () => prices.fancySandcastle.canAfford(), prices.fancySandcastle)
+], () => true));
+let oceanTab = new GameTab('Ocean', () => true);
+game.tabs.set('ocean', oceanTab);
+oceanTab.addElement(new TabHtmlElement('The ocean is blue.', () => !game.globals.oceanDrained));
+oceanTab.addElement(new TabHtmlElement('The ocean is blue and dry.', () => game.globals.oceanDrained));
+oceanTab.addElement(new ButtonList([
+    new Button('gather-wet', 'Gather wet', 'gatherWet()', () => !game.globals.oceanDrained)
+], () => true));
+let crabitalistTab = new GameTab('Crabitalist', () => game.globals.crabitalist);
+game.tabs.set('crabitalist', crabitalistTab);
+crabitalistTab.addElement(new TabHtmlElement('The crabitalist wishes to buy and sell your goods.', () => true));
+crabitalistTab.addElement(new ButtonList([
+    new Button('buy-bucket', 'Buy bucket', 'buyBucket()', () => !game.globals.bucket, () => prices.bucket.canAfford(), prices.bucket)
+], () => true));
 // Milestones
 game.milestones.set('sandcastleUnlock', new Milestone('sandcastleUnlock', function () { return (game.resources.get('sand').amount >= 10); }, function () {
     log('You have a little pile of sand. You could make a sandcastle out of it');
@@ -229,37 +254,46 @@ function updateUI() {
     // Show visible resources
     for (const [resourceKey, resourceValue] of game.resources) {
         if (resourceValue.visibleTest()) {
-            resourceValue.displayNode.classList.remove('locked');
+            resourceValue.displayNode.classList.remove('hidden');
             // Update displayed amount
             resourceValue.amountNode.innerText = resourceValue.amount.toString();
         }
         else {
-            resourceValue.displayNode.classList.add('locked');
+            resourceValue.displayNode.classList.add('hidden');
         }
     }
     // Tabs
     for (const [tabKey, tabValue] of game.tabs) {
         if (tabValue.visibleTest()) {
-            tabValue.tabNode.classList.remove('locked');
-            tabValue.paneNode.classList.remove('locked');
+            tabValue.tabNode.classList.remove('hidden');
+            tabValue.paneNode.classList.remove('hidden');
         }
         else {
-            tabValue.tabNode.classList.add('locked');
-            tabValue.paneNode.classList.add('locked');
+            tabValue.tabNode.classList.add('hidden');
+            tabValue.paneNode.classList.add('hidden');
         }
         // Buttons
-        for (const [buttonKey, buttonValue] of tabValue.buttons) {
-            if (buttonValue.visibleTest()) {
-                buttonValue.node.classList.remove('locked');
-                if (buttonValue.enableTest()) {
-                    buttonValue.node.classList.remove('disabled');
-                }
-                else {
-                    buttonValue.node.classList.add('disabled');
-                }
+        for (var element of tabValue.elements) {
+            if (element.visibleTest()) {
+                element.node.classList.remove('hidden');
             }
             else {
-                buttonValue.node.classList.add('locked');
+                element.node.classList.add('hidden');
+            }
+            if (element instanceof ButtonList) {
+                for (var button of element.contents)
+                    if (button.visibleTest()) {
+                        button.node.classList.remove('hidden');
+                        if (button.enableTest()) {
+                            button.node.classList.remove('disabled');
+                        }
+                        else {
+                            button.node.classList.add('disabled');
+                        }
+                    }
+                    else {
+                        button.node.classList.add('hidden');
+                    }
             }
         }
         // Prices
@@ -358,7 +392,7 @@ function createResourceDisplay(resName) {
     var res = game.resources.get(resName);
     var newResource = document.createElement('li');
     newResource.classList.add('resource');
-    newResource.classList.add('locked');
+    newResource.classList.add('hidden');
     newResource.setAttribute('id', resName);
     // This is where the amount of the resource will be displayed
     var newAmountNode = document.createElement('span');
@@ -393,40 +427,42 @@ function createTabDisplay(tabName) {
     // Tab at top of pane
     var newTab = document.createElement('span');
     newTab.classList.add('tab');
-    newTab.classList.add('locked');
+    newTab.classList.add('hidden');
     newTab.setAttribute('onclick', 'switchTab(\'' + tabName + '\')');
     newTab.setAttribute('id', tabName);
     newTab.innerText = tab.name;
     // The pane itself
     var newTabPane = document.createElement('div');
     newTabPane.classList.add('pane');
-    newTabPane.classList.add('locked');
+    newTabPane.classList.add('hidden');
     newTabPane.setAttribute('id', tabName);
-    // Text description
-    var tabText = document.createElement('div');
-    tabText.classList.add('tab-text');
-    tabText.innerText = tab.text;
-    newTabPane.appendChild(tabText);
-    tab.textNode = tabText;
-    // Add buttons
-    var buttonDiv = document.createElement('div');
-    buttonDiv.classList.add('button-list');
-    newTabPane.appendChild(buttonDiv);
-    for (var [buttonName, value] of tab.buttons) {
-        var button = tab.buttons.get(buttonName);
-        var newButton = document.createElement('button');
-        newButton.classList.add('locked');
-        newButton.setAttribute('onclick', button.func);
-        newButton.innerText = (button.text);
-        if (button.price != null) {
-            var priceDisplay = document.createElement('div');
-            priceDisplay.classList.add('button-price');
-            priceDisplay.textContent = button.price.toString();
-            button.price.displayNode = priceDisplay;
-            newButton.appendChild(priceDisplay);
+    // Add html elements
+    for (const element of tab.elements) {
+        var newElement = document.createElement('div');
+        if (element instanceof TabHtmlElement) {
+            newElement.innerHTML = element.contents;
         }
-        button.node = newButton;
-        buttonDiv.appendChild(newButton);
+        else if (element instanceof ButtonList) {
+            newElement.classList.add('button-list');
+            // Build the list of buttons
+            for (const button of element.contents) {
+                var newButton = document.createElement('button');
+                newButton.setAttribute('id', button.id);
+                newButton.setAttribute('onclick', button.func);
+                newButton.innerText = (button.text);
+                if (button.price != null) {
+                    var priceDisplay = document.createElement('div');
+                    priceDisplay.classList.add('button-price');
+                    priceDisplay.textContent = button.price.toString();
+                    button.price.displayNode = priceDisplay;
+                    newButton.appendChild(priceDisplay);
+                }
+                button.node = newButton;
+                newElement.appendChild(newButton);
+            }
+        }
+        element.node = newElement;
+        newTabPane.appendChild(newElement);
     }
     tab.tabNode = newTab;
     tab.paneNode = newTabPane;
