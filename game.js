@@ -11,7 +11,11 @@ var statusMsg;
 var game = {
     tabs: new Map(), resources: new Map(),
     milestones: new Map(), buildings: new Map(),
-    globals: new Map(), debug: false, activeTab: null
+    globals: {
+        oceanDrained: false,
+        bucket: false,
+        fancySandcastle: false
+    }, debug: false, activeTab: null
 };
 class GameTab {
     constructor(name, text, buttons) {
@@ -25,14 +29,15 @@ class GameTab {
     }
 }
 class Resource {
-    constructor(name, singularName) {
+    constructor(name, singularName, visibleTest) {
         this.toString = () => {
             return this.name;
         };
         this.name = name;
         this.singularName = singularName;
         this.amount = 0;
-        this.visible = false;
+        console.log(visibleTest);
+        this.visibleTest = visibleTest;
     }
 }
 class Button {
@@ -122,11 +127,11 @@ class Price {
  *                                         *
  *******************************************/
 // Create all the resources
-game.resources.set('sand', new Resource('Sand', 'Sand'));
-game.resources.set('rocks', new Resource('Rocks', 'Rock'));
-game.resources.set('wet', new Resource('Wet', 'Wet'));
-game.resources.set('sandcastles', new Resource('Sandcastles', 'Sandcastle'));
-game.resources.set('crabs', new Resource('Crabs', 'Crab'));
+game.resources.set('sand', new Resource('Sand', 'Sand', () => { return true; }));
+game.resources.set('rocks', new Resource('Rocks', 'Rock', () => { return true; }));
+game.resources.set('wet', new Resource('Wet', 'Wet', () => { return game.resources.get('wet').amount >= 1; }));
+game.resources.set('sandcastles', new Resource('Sandcastles', 'Sandcastle', () => { return game.milestones.get('sandcastleUnlock').active == false; }));
+game.resources.set('crabs', new Resource('Crabs', 'Crab', () => { return game.globals.fancySandcastle; }));
 // Prices
 let prices = {
     sandcastle: new Price([
@@ -157,10 +162,10 @@ game.tabs.set('ocean', new GameTab('Ocean', 'The ocean is blue', new Map([
     ['wet', new Button('Gather wet', 'gatherWet()')]
 ])));
 game.tabs.set('crabitalist', new GameTab('Crabitalist', 'The crabitalist wishes to buy and sell your goods', new Map([
-    ['buyBucket', new Button('Buy bucket', 'buyBucket()', function () { return (!game.globals.get('bucket') && prices.bucket.canAfford()); }, prices.bucket)]
+    ['buyBucket', new Button('Buy bucket', 'buyBucket()', function () { return (!game.globals.bucket && prices.bucket.canAfford()); }, prices.bucket)]
 ])));
 // Milestones
-game.milestones.set('sandCastleUnlock', new Milestone('sandCastleUnlock', function () { return (game.resources.get('sand').amount >= 10); }, function () {
+game.milestones.set('sandcastleUnlock', new Milestone('sandcastleUnlock', function () { return (game.resources.get('sand').amount >= 10); }, function () {
     log('You have a little pile of sand. You could make a sandcastle out of it');
     game.tabs.get('beach').buttons.get('sandcastle').visible = true;
     this.active = false;
@@ -168,14 +173,14 @@ game.milestones.set('sandCastleUnlock', new Milestone('sandCastleUnlock', functi
 game.milestones.set('tooMuchWet', new Milestone('tooMuchWet', function () { return (game.resources.get('wet').amount >= 99); }, function () {
     log('Ocean ran out');
     game.tabs.get('ocean').buttons.get('wet').visible = false;
-    game.globals.set('oceanDrained', true);
+    game.globals.oceanDrained = true;
     this.active = false;
 }, false));
-game.milestones.set('oceanDrained', new Milestone('oceanDrained', function () { return (game.globals.get('oceanDrained')); }, function () {
+game.milestones.set('oceanDrained', new Milestone('oceanDrained', function () { return (game.globals.oceanDrained); }, function () {
     game.tabs.get('ocean').textNode.textContent = "The ocean is blue and dry";
     this.active = false;
 }, true));
-game.milestones.set('oceanBack', new Milestone('oceanBack', function () { return (!game.globals.get('oceanDrained')); }, function () {
+game.milestones.set('oceanBack', new Milestone('oceanBack', function () { return (!game.globals.oceanDrained); }, function () {
     game.tabs.get('ocean').textNode.textContent = "The ocean is blue";
     this.active = false;
 }, true));
@@ -185,17 +190,13 @@ game.milestones.set('unlockCrabitalist', new Milestone('unlockCrabitalist', func
     game.tabs.get('crabitalist').buttons.get('buyBucket').visible = true;
     this.active = false;
 }, false));
-game.milestones.set('boughtBucket', new Milestone('boughtBucket', function () { return (game.globals.get('bucket')); }, function () {
+game.milestones.set('boughtBucket', new Milestone('boughtBucket', function () { return (game.globals.bucket); }, function () {
     log('The crabitalist has fled!');
     game.tabs.get('crabitalist').visible = false;
     game.tabs.get('beach').buttons.get('fancySandcastle').visible = true;
     switchTab('beach');
     this.active = false;
 }, false));
-// Globals
-game.globals.set('oceanDrained', false);
-game.globals.set('bucket', false);
-game.globals.set('fancySandcastle', false);
 /*
  *
  *	       CONTENT LOADED
@@ -242,7 +243,7 @@ function update() {
 function updateUI() {
     // Show visible resources
     for (const [resourceKey, resourceValue] of game.resources) {
-        if (resourceValue.visible) {
+        if (resourceValue.visibleTest()) {
             resourceValue.displayNode.classList.remove('locked');
             // Update displayed amount
             resourceValue.amountNode.innerText = resourceValue.amount.toString();
@@ -310,29 +311,28 @@ function gatherButton() {
 }
 function makeSandcastle() {
     if (prices.sandcastle.spend()) {
-        unlockResource('sandcastles');
         addResourceName('sandcastles', 1);
     }
 }
 function gatherWet() {
-    unlockResource('wet');
     addResourceName('wet', 1);
 }
 function buyBucket() {
     if (prices.bucket.spend()) {
         log('You have acquired a bucket');
         game.tabs.get('crabitalist').buttons.get('buyBucket').visible = false;
-        game.globals.set('bucket', true);
+        game.globals.bucket = true;
     }
     saveGame();
 }
 function makeFancySandcastle() {
     if (prices.fancySandcastle.spend()) {
         log('A friendly crab moves into the fancy sandcastle and begins adding sand to your pile');
+        game.globals.fancySandcastle = true;
         game.buildings.get('crabs').amount += 1;
-        unlockResource('crabs');
         addResourceName('crabs', 1);
         // TODO: This should get disabled afterwords. Do that after overhauling how visibility is stored (again)
+        // Globals work now. Woo. Now do it for buttons.
     }
 }
 /********************************************
@@ -376,11 +376,6 @@ function createResourceDisplay(resName) {
     newResource.innerText = res.name + ': ';
     newResource.appendChild(newAmountNode);
     resourceList.appendChild(newResource);
-}
-function unlockResource(resName) {
-    var res = game.resources.get(resName);
-    res.visible = true;
-    saveGame();
 }
 /*
  *
@@ -475,7 +470,7 @@ function log(msg, debug = false) {
 function saveGame() {
     var saveData = { resources: {}, buildings: {}, tabs: {}, buttons: {}, milestones: {}, globals: {}, activeTab: null, debug: false };
     for (const [key, value] of game.resources) {
-        saveData.resources[key] = [value.amount, value.visible];
+        saveData.resources[key] = value.amount;
     }
     for (const [key, value] of game.buildings) {
         saveData.buildings[key] = [value.amount];
@@ -489,8 +484,8 @@ function saveGame() {
     for (const [key, value] of game.milestones) {
         saveData.milestones[key] = [value.active];
     }
-    for (const [key, value] of game.globals) {
-        saveData.globals[key] = value;
+    for (const global in game.globals) {
+        saveData.globals[global] = game.globals[global];
     }
     saveData.activeTab = game.activeTab;
     saveData.debug = game.debug;
@@ -510,8 +505,7 @@ function loadGame() {
          */
         // Resources [visible, amount]
         for (const res in saveData.resources) {
-            game.resources.get(res).visible = saveData.resources[res][1];
-            game.resources.get(res).amount = saveData.resources[res][0];
+            game.resources.get(res).amount = saveData.resources[res];
         }
         for (const building in saveData.buildings) {
             game.buildings.get(building).amount = saveData.buildings[building][0];
@@ -526,7 +520,7 @@ function loadGame() {
         }
         // Globals [value]
         for (const global in saveData.globals) {
-            game.globals.set(global, saveData.globals[global]);
+            game.globals[global] = saveData.globals[global];
         }
         // Milestones [active]
         for (const milestone in saveData.milestones) {
@@ -544,8 +538,6 @@ function loadGame() {
     }
     else {
         // No savegame, start from the beginning
-        unlockResource('sand');
-        unlockResource('rocks');
         unlockTab('beach');
         unlockTab('ocean');
         switchTab('beach');
