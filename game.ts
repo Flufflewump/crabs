@@ -372,8 +372,79 @@ document.addEventListener('DOMContentLoaded', function () {
 	log('Debug mode is ' + (game.globals.debug ? 'enabled' : 'disabled'), true);
 });
 
+/********************************************
+ *                                          *
+ *                                          *
+ *             BUTTON FUNCTIONS             *
+ *                                          *
+ *                                          *
+ *******************************************/
+
+function cheat() {
+	addResourceName('sand', 1000);
+	addResourceName('rocks', 100);
+}
+
+function gatherButton() {
+	addResourceName('sand', 1);
+	if (Math.random() < (1/244)) {
+		addResourceName('rocks', 1);
+		log('You found a cool rock in the sand')
+	}
+}
+
+function makeSandcastle() {
+	if (prices.sandcastle.spend()) {
+		addResourceName('sandcastles', 1);
+	}
+}
+
+function gatherWet() {
+	addResourceName('wet', 1);
+}
+
+function buyBucket() {
+	if (prices.bucket.spend()) {
+		log('You have acquired a bucket');
+		log('The Crabitalist has fled!');
+		game.globals.bucket = true;
+		game.globals.crabitalist = false;
+	}
+	saveGame();
+}
+
+function makeFancySandcastle() {
+	if (prices.fancySandcastle.spend()) {
+		log('A friendly crab moves into the fancy sandcastle and begins adding sand to your pile');
+		game.globals.fancySandcastle = true;
+		game.buildings.get('crabs').amount += 1;
+		addResourceName('crabs', 1);
 
 
+		// TODO: This should get disabled afterwords. Do that after overhauling how visibility is stored (again)
+		// Globals work now. Woo. Now do it for buttons.
+		// Done. yay. I'm leaving these comments for sentimental reasons.
+	}
+}
+
+function addRoom() {
+	if (prices.room.spend()) {
+		game.buildings.get('crabs').amount += 1;
+		addResourceName('crabs', 1);
+	}
+}
+
+/********************************************
+ *                                          *
+ *                                          *
+ *           BUILDING FUNCTIONS             *
+ *                                          *
+ *                                          *
+ *******************************************/
+
+function crabTick() {
+	addResourceName('sand', game.buildings.get('crabs').amount);
+}
 
 /**********************************
  *                                *
@@ -381,7 +452,7 @@ document.addEventListener('DOMContentLoaded', function () {
  *                                *
  **********************************/
 
-function update() {
+ function update() {
 	for (const [key, building] of game.buildings) {
 		building.update();
 	}
@@ -462,85 +533,11 @@ function checkMilestones() {
     }
 }
 
-/********************************************
- *                                          *
- *                                          *
- *             BUTTON FUNCTIONS             *
- *                                          *
- *                                          *
+/*******************************************
+ *                                         *
+ *             ENGINE STUFF                *
+ *                                         *
  *******************************************/
-
-function cheat() {
-	addResourceName('sand', 1000);
-	addResourceName('rocks', 100);
-}
-
-function gatherButton() {
-	addResourceName('sand', 1);
-	if (Math.random() < (1/244)) {
-		addResourceName('rocks', 1);
-		log('You found a cool rock in the sand')
-	}
-}
-
-function makeSandcastle() {
-	if (prices.sandcastle.spend()) {
-		addResourceName('sandcastles', 1);
-	}
-}
-
-function gatherWet() {
-	addResourceName('wet', 1);
-}
-
-function buyBucket() {
-	if (prices.bucket.spend()) {
-		log('You have acquired a bucket');
-		log('The Crabitalist has fled!');
-		game.globals.bucket = true;
-		game.globals.crabitalist = false;
-	}
-	saveGame();
-}
-
-function makeFancySandcastle() {
-	if (prices.fancySandcastle.spend()) {
-		log('A friendly crab moves into the fancy sandcastle and begins adding sand to your pile');
-		game.globals.fancySandcastle = true;
-		game.buildings.get('crabs').amount += 1;
-		addResourceName('crabs', 1);
-
-
-		// TODO: This should get disabled afterwords. Do that after overhauling how visibility is stored (again)
-		// Globals work now. Woo. Now do it for buttons.
-		// Done. yay. I'm leaving these comments for sentimental reasons.
-	}
-}
-
-function addRoom() {
-	if (prices.room.spend()) {
-		game.buildings.get('crabs').amount += 1;
-		addResourceName('crabs', 1);
-	}
-}
-
-/********************************************
- *                                          *
- *                                          *
- *           BUILDING FUNCTIONS             *
- *                                          *
- *                                          *
- *******************************************/
-
-function crabTick() {
-	addResourceName('sand', game.buildings.get('crabs').amount);
-}
-
-/*
- * 
- * HELPER FUNCTIONS: RESOURCES
- * 
- */
 
 function addResourceName(resName: string, amount: number) {
 	addResource(game.resources.get(resName), amount);
