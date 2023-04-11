@@ -139,6 +139,11 @@ main {
         display: block;
     }
 
+
+img {
+    margin-bottom: 1em;
+}
+
 .button-list {
     padding: 1em 0;
     display: flex;

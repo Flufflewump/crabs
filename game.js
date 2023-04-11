@@ -32,10 +32,16 @@ class GameTab {
         this.elements.push(element);
     }
 }
-class TabHtmlElement {
+class TabDiv {
     constructor(contents, visibleTest) {
         this.visibleTest = visibleTest;
         this.contents = contents;
+    }
+}
+class TabImage {
+    constructor(src, visibleTest) {
+        this.visibleTest = visibleTest;
+        this.src = src;
     }
 }
 class ButtonList {
@@ -173,27 +179,28 @@ game.buildings.set('crabs', new Building('Crabs', 'Crab', crabTick));
  * *****************/
 let beachTab = new GameTab('Beach', () => true);
 game.tabs.set('beach', beachTab);
-beachTab.addElement(new TabHtmlElement('Sand and rocks line the beach.', () => true));
+beachTab.addElement(new TabDiv('Sand and rocks line the beach.', () => true));
 beachTab.addElement(new ButtonList([
     new Button('gather-sand', 'Gather sand', 'gatherButton()'),
     new Button('cheat', 'Cheat!', 'cheat()', () => { return game.globals.debug; }),
     new Button('build-sandcastle', 'Build sandcastle', 'makeSandcastle()', () => { return (!game.milestones.get('sandcastleUnlock').active); }, () => prices.sandcastle.canAfford(), prices.sandcastle),
     new Button('build-fancy-castle', 'Build fancy sandcastle', 'makeFancySandcastle()', () => { return (game.globals.bucket && !game.globals.fancySandcastle); }, () => prices.fancySandcastle.canAfford(), prices.fancySandcastle)
 ], () => true));
-beachTab.addElement(new TabHtmlElement('<h3>Fancy Sandcastle</h3>', () => game.globals.fancySandcastle));
+beachTab.addElement(new TabDiv('<h3>Fancy Sandcastle</h3>', () => game.globals.fancySandcastle));
 beachTab.addElement(new ButtonList([
     new Button('add-room', 'Add room', 'addRoom()', () => true, () => prices.room.canAfford(), prices.room)
 ], () => game.globals.fancySandcastle));
 let oceanTab = new GameTab('Ocean', () => true);
 game.tabs.set('ocean', oceanTab);
-oceanTab.addElement(new TabHtmlElement('The ocean is blue.', () => !game.globals.oceanDrained));
-oceanTab.addElement(new TabHtmlElement('The ocean is blue and dry.', () => game.globals.oceanDrained));
+oceanTab.addElement(new TabDiv('The ocean is blue.', () => !game.globals.oceanDrained));
+oceanTab.addElement(new TabDiv('The ocean is blue and dry.', () => game.globals.oceanDrained));
 oceanTab.addElement(new ButtonList([
     new Button('gather-wet', 'Gather wet', 'gatherWet()', () => !game.globals.oceanDrained)
 ], () => true));
 let crabitalistTab = new GameTab('Crabitalist', () => game.globals.crabitalist);
 game.tabs.set('crabitalist', crabitalistTab);
-crabitalistTab.addElement(new TabHtmlElement('The crabitalist wishes to buy and sell your goods.', () => true));
+crabitalistTab.addElement(new TabImage('images/crabitalist.png', () => true));
+crabitalistTab.addElement(new TabDiv('The crabitalist wishes to buy and sell your goods.', () => true));
 crabitalistTab.addElement(new ButtonList([
     new Button('buy-bucket', 'Buy bucket', 'buyBucket()', () => !game.globals.bucket, () => prices.bucket.canAfford(), prices.bucket)
 ], () => true));
@@ -250,6 +257,68 @@ document.addEventListener('DOMContentLoaded', function () {
     log('Loaded game!');
     log('Debug mode is ' + (game.globals.debug ? 'enabled' : 'disabled'), true);
 });
+/********************************************
+ *                                          *
+ *                                          *
+ *             BUTTON FUNCTIONS             *
+ *                                          *
+ *                                          *
+ *******************************************/
+function cheat() {
+    addResourceName('sand', 1000);
+    addResourceName('rocks', 100);
+}
+function gatherButton() {
+    addResourceName('sand', 1);
+    if (Math.random() < (1 / 244)) {
+        addResourceName('rocks', 1);
+        log('You found a cool rock in the sand');
+    }
+}
+function makeSandcastle() {
+    if (prices.sandcastle.spend()) {
+        addResourceName('sandcastles', 1);
+    }
+}
+function gatherWet() {
+    addResourceName('wet', 1);
+}
+function buyBucket() {
+    if (prices.bucket.spend()) {
+        log('You have acquired a bucket');
+        log('The Crabitalist has fled!');
+        game.globals.bucket = true;
+        game.globals.crabitalist = false;
+    }
+    saveGame();
+}
+function makeFancySandcastle() {
+    if (prices.fancySandcastle.spend()) {
+        log('A friendly crab moves into the fancy sandcastle and begins adding sand to your pile');
+        game.globals.fancySandcastle = true;
+        game.buildings.get('crabs').amount += 1;
+        addResourceName('crabs', 1);
+        // TODO: This should get disabled afterwords. Do that after overhauling how visibility is stored (again)
+        // Globals work now. Woo. Now do it for buttons.
+        // Done. yay. I'm leaving these comments for sentimental reasons.
+    }
+}
+function addRoom() {
+    if (prices.room.spend()) {
+        game.buildings.get('crabs').amount += 1;
+        addResourceName('crabs', 1);
+    }
+}
+/********************************************
+ *                                          *
+ *                                          *
+ *           BUILDING FUNCTIONS             *
+ *                                          *
+ *                                          *
+ *******************************************/
+function crabTick() {
+    addResourceName('sand', game.buildings.get('crabs').amount);
+}
 /**********************************
  *                                *
  *	          GAME LOOP           *
@@ -330,73 +399,11 @@ function checkMilestones() {
         }
     }
 }
-/********************************************
- *                                          *
- *                                          *
- *             BUTTON FUNCTIONS             *
- *                                          *
- *                                          *
+/*******************************************
+ *                                         *
+ *             ENGINE STUFF                *
+ *                                         *
  *******************************************/
-function cheat() {
-    addResourceName('sand', 1000);
-    addResourceName('rocks', 100);
-}
-function gatherButton() {
-    addResourceName('sand', 1);
-    if (Math.random() < (1 / 244)) {
-        addResourceName('rocks', 1);
-        log('You found a cool rock in the sand');
-    }
-}
-function makeSandcastle() {
-    if (prices.sandcastle.spend()) {
-        addResourceName('sandcastles', 1);
-    }
-}
-function gatherWet() {
-    addResourceName('wet', 1);
-}
-function buyBucket() {
-    if (prices.bucket.spend()) {
-        log('You have acquired a bucket');
-        log('The Crabitalist has fled!');
-        game.globals.bucket = true;
-        game.globals.crabitalist = false;
-    }
-    saveGame();
-}
-function makeFancySandcastle() {
-    if (prices.fancySandcastle.spend()) {
-        log('A friendly crab moves into the fancy sandcastle and begins adding sand to your pile');
-        game.globals.fancySandcastle = true;
-        game.buildings.get('crabs').amount += 1;
-        addResourceName('crabs', 1);
-        // TODO: This should get disabled afterwords. Do that after overhauling how visibility is stored (again)
-        // Globals work now. Woo. Now do it for buttons.
-        // Done. yay. I'm leaving these comments for sentimental reasons.
-    }
-}
-function addRoom() {
-    if (prices.room.spend()) {
-        game.buildings.get('crabs').amount += 1;
-        addResourceName('crabs', 1);
-    }
-}
-/********************************************
- *                                          *
- *                                          *
- *           BUILDING FUNCTIONS             *
- *                                          *
- *                                          *
- *******************************************/
-function crabTick() {
-    addResourceName('sand', game.buildings.get('crabs').amount);
-}
-/*
- *
- * HELPER FUNCTIONS: RESOURCES
- *
- */
 function addResourceName(resName, amount) {
     addResource(game.resources.get(resName), amount);
 }
@@ -454,8 +461,13 @@ function createTabDisplay(tabName) {
     // Add html elements
     for (const element of tab.elements) {
         var newElement = document.createElement('div');
-        if (element instanceof TabHtmlElement) {
-            newElement.innerHTML = element.contents;
+        if (element instanceof TabDiv) {
+            newElement.textContent = element.contents;
+        }
+        else if (element instanceof TabImage) {
+            var imageElement = document.createElement('img');
+            imageElement.setAttribute('src', element.src);
+            newElement.appendChild(imageElement);
         }
         else if (element instanceof ButtonList) {
             newElement.classList.add('button-list');

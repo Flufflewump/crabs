@@ -50,7 +50,7 @@ interface TabElement {
 	node: HTMLElement;
 }
 
-class TabHtmlElement implements TabElement {
+class TabDiv implements TabElement {
 	contents: string;
 	visibleTest: Function;
 	node: HTMLElement;
@@ -58,6 +58,17 @@ class TabHtmlElement implements TabElement {
 	constructor(contents: string, visibleTest: Function) {
 		this.visibleTest = visibleTest;
 		this.contents = contents;
+	}
+}
+
+class TabImage implements TabElement {
+	src: string;
+	visibleTest: Function;
+	node: HTMLElement;
+
+	constructor(src: string, visibleTest: Function) {
+		this.visibleTest = visibleTest;
+		this.src = src;
 	}
 }
 
@@ -261,14 +272,14 @@ game.buildings.set('crabs', new Building('Crabs', 'Crab', crabTick))
 let beachTab = new GameTab('Beach', () => true);
 game.tabs.set('beach', beachTab);
 
-beachTab.addElement(new TabHtmlElement('Sand and rocks line the beach.', () => true));
+beachTab.addElement(new TabDiv('Sand and rocks line the beach.', () => true));
 beachTab.addElement(new ButtonList([
 	new Button('gather-sand', 'Gather sand', 'gatherButton()'),
 	new Button('cheat', 'Cheat!', 'cheat()', () => {return game.globals.debug}),
 	new Button('build-sandcastle', 'Build sandcastle', 'makeSandcastle()', () => {return (!game.milestones.get('sandcastleUnlock').active)}, () => prices.sandcastle.canAfford(), prices.sandcastle),
 	new Button('build-fancy-castle', 'Build fancy sandcastle', 'makeFancySandcastle()', () => {return (game.globals.bucket && !game.globals.fancySandcastle)}, () => prices.fancySandcastle.canAfford(), prices.fancySandcastle)
 ], () => true));
-beachTab.addElement(new TabHtmlElement('<h3>Fancy Sandcastle</h3>', () => game.globals.fancySandcastle))
+beachTab.addElement(new TabDiv('<h3>Fancy Sandcastle</h3>', () => game.globals.fancySandcastle))
 beachTab.addElement(new ButtonList([
 	new Button('add-room', 'Add room', 'addRoom()', () => true, () => prices.room.canAfford(), prices.room)
 ], () => game.globals.fancySandcastle))
@@ -277,8 +288,8 @@ beachTab.addElement(new ButtonList([
 let oceanTab = new GameTab('Ocean', () => true);
 game.tabs.set('ocean', oceanTab);
 
-oceanTab.addElement(new TabHtmlElement('The ocean is blue.', () => !game.globals.oceanDrained));
-oceanTab.addElement(new TabHtmlElement('The ocean is blue and dry.', () => game.globals.oceanDrained));
+oceanTab.addElement(new TabDiv('The ocean is blue.', () => !game.globals.oceanDrained));
+oceanTab.addElement(new TabDiv('The ocean is blue and dry.', () => game.globals.oceanDrained));
 oceanTab.addElement(new ButtonList([
 	new Button('gather-wet', 'Gather wet', 'gatherWet()', () => !game.globals.oceanDrained)
 ], () => true));
@@ -286,7 +297,8 @@ oceanTab.addElement(new ButtonList([
 
 let crabitalistTab = new GameTab('Crabitalist', () => game.globals.crabitalist);
 game.tabs.set('crabitalist', crabitalistTab);
-crabitalistTab.addElement(new TabHtmlElement('The crabitalist wishes to buy and sell your goods.', () => true));
+crabitalistTab.addElement(new TabImage('images/crabitalist.png', () => true));
+crabitalistTab.addElement(new TabDiv('The crabitalist wishes to buy and sell your goods.', () => true));
 crabitalistTab.addElement(new ButtonList([
 	new Button('buy-bucket', 'Buy bucket', 'buyBucket()', () => !game.globals.bucket, () => prices.bucket.canAfford(), prices.bucket)
 ], () => true));
@@ -614,9 +626,14 @@ function createTabDisplay(tabName) {
 	for (const element of tab.elements) {
 		var newElement = document.createElement('div');
 
-		if (element instanceof TabHtmlElement) {
-			newElement.innerHTML = element.contents;
+		if (element instanceof TabDiv) {
+			newElement.textContent = element.contents;
 		} 
+		else if (element instanceof TabImage) {
+			var imageElement = document.createElement('img');
+			imageElement.setAttribute('src', element.src);
+			newElement.appendChild(imageElement);
+		}
 		else if (element instanceof ButtonList) {
 			newElement.classList.add('button-list');
 
