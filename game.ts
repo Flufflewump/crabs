@@ -627,7 +627,7 @@ function createTabDisplay(tabName) {
 		var newElement = document.createElement('div');
 
 		if (element instanceof TabDiv) {
-			newElement.textContent = element.contents;
+			newElement.innerHTML = element.contents;
 		} 
 		else if (element instanceof TabImage) {
 			var imageElement = document.createElement('img');
