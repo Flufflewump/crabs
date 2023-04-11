@@ -158,8 +158,9 @@ let prices = {
         new ResourceCost(game.resources.get('sandcastles'), 4, constantPrice)]),
     bucket: new Price([new ResourceCost(game.resources.get('sandcastles'), 20, constantPrice)]),
     room: new Price([
-        new ResourceCost(game.resources.get('sand'), 5, (input) => { return game.buildings.get('crabs').amount; })
-    ])
+        new ResourceCost(game.resources.get('sand'), 100, (input) => input ** 1.05),
+        new ResourceCost(game.resources.get('sandcastles'), 3, (input) => input ** 1.05)
+    ], () => game.resources.get('crabs').amount - 1)
 };
 // Cost increment functions
 function constantPrice(input) {
@@ -179,6 +180,10 @@ beachTab.addElement(new ButtonList([
     new Button('build-sandcastle', 'Build sandcastle', 'makeSandcastle()', () => { return (!game.milestones.get('sandcastleUnlock').active); }, () => prices.sandcastle.canAfford(), prices.sandcastle),
     new Button('build-fancy-castle', 'Build fancy sandcastle', 'makeFancySandcastle()', () => { return (game.globals.bucket && !game.globals.fancySandcastle); }, () => prices.fancySandcastle.canAfford(), prices.fancySandcastle)
 ], () => true));
+beachTab.addElement(new TabHtmlElement('<h3>Fancy Sandcastle</h3>', () => game.globals.fancySandcastle));
+beachTab.addElement(new ButtonList([
+    new Button('add-room', 'Add room', 'addRoom()', () => true, () => prices.room.canAfford(), prices.room)
+], () => game.globals.fancySandcastle));
 let oceanTab = new GameTab('Ocean', () => true);
 game.tabs.set('ocean', oceanTab);
 oceanTab.addElement(new TabHtmlElement('The ocean is blue.', () => !game.globals.oceanDrained));
@@ -205,6 +210,10 @@ game.milestones.set('tooMuchWet', new Milestone('tooMuchWet', function () { retu
 game.milestones.set('unlockCrabitalist', new Milestone('unlockCrabitalist', function () { return (game.resources.get('sandcastles').amount >= 10); }, function () {
     log('Your sandcastles have attracted the attention of a wealthy crabitalist');
     game.globals.crabitalist = true;
+    this.active = false;
+}));
+game.milestones.set('firstRoom', new Milestone('firstRoom', function () { return (game.resources.get('crabs').amount >= 2); }, function () {
+    log('Another crab moves into the new room');
     this.active = false;
 }));
 /*
@@ -365,6 +374,12 @@ function makeFancySandcastle() {
         // TODO: This should get disabled afterwords. Do that after overhauling how visibility is stored (again)
         // Globals work now. Woo. Now do it for buttons.
         // Done. yay. I'm leaving these comments for sentimental reasons.
+    }
+}
+function addRoom() {
+    if (prices.room.spend()) {
+        game.buildings.get('crabs').amount += 1;
+        addResourceName('crabs', 1);
     }
 }
 /********************************************
