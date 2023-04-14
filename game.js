@@ -1,7 +1,6 @@
 var msgLog;
 var resourceList;
 var tabList;
-var paneList;
 var statusMsg;
 /*
  *
@@ -15,8 +14,11 @@ var game = {
         oceanDrained: false,
         bucket: false,
         fancySandcastle: false,
+        mould: false,
+        mouldTicks: 0,
         crabitalist: false,
-        debug: true
+        crabitalistState: 0,
+        debug: false
     }, activeTab: null
 };
 class GameTab {
@@ -73,8 +75,7 @@ class Button {
     }
 }
 class Milestone {
-    constructor(name, test, event) {
-        this.name = name;
+    constructor(test, event) {
         this.test = test;
         this.event = event;
         this.active = true;
@@ -162,7 +163,9 @@ let prices = {
     fancySandcastle: new Price([new ResourceCost(game.resources.get('sand'), 20, constantPrice),
         new ResourceCost(game.resources.get('rocks'), 2, constantPrice),
         new ResourceCost(game.resources.get('sandcastles'), 4, constantPrice)]),
-    bucket: new Price([new ResourceCost(game.resources.get('sandcastles'), 20, constantPrice)]),
+    bucket: new Price([new ResourceCost(game.resources.get('sandcastles'), 5, constantPrice)]),
+    rockTrade: new Price([new ResourceCost(game.resources.get('sandcastles'), 3, constantPrice)]),
+    mould: new Price([new ResourceCost(game.resources.get('rocks'), 20, constantPrice)]),
     room: new Price([
         new ResourceCost(game.resources.get('sand'), 100, (input) => input ** 1.05),
         new ResourceCost(game.resources.get('sandcastles'), 3, (input) => input ** 1.05)
@@ -200,27 +203,36 @@ oceanTab.addElement(new ButtonList([
 let crabitalistTab = new GameTab('Crabitalist', () => game.globals.crabitalist);
 game.tabs.set('crabitalist', crabitalistTab);
 crabitalistTab.addElement(new TabImage('images/crabitalist.png', () => true));
-crabitalistTab.addElement(new TabDiv('The crabitalist wishes to buy and sell your goods.', () => true));
+crabitalistTab.addElement(new TabDiv('The crabitalist wishes to buy and sell your goods.', () => game.globals.crabitalistState == 0));
+crabitalistTab.addElement(new TabDiv('"I have many new things for sale!"', () => game.globals.crabitalistState == 1));
 crabitalistTab.addElement(new ButtonList([
-    new Button('buy-bucket', 'Buy bucket', 'buyBucket()', () => !game.globals.bucket, () => prices.bucket.canAfford(), prices.bucket)
+    new Button('buy-bucket', 'Buy bucket', 'buyBucket()', () => !game.globals.bucket, () => prices.bucket.canAfford(), prices.bucket),
+    new Button('buy-rock', '5 Cool rocks', 'rockTrade()', () => game.globals.crabitalistState == 1, () => prices.rockTrade.canAfford(), prices.rockTrade),
+    new Button('buy-mould', 'Sandcastle Mould', 'buyMould()', () => (game.globals.crabitalistState == 1 && !game.globals.mould), () => prices.mould.canAfford(), prices.mould)
 ], () => true));
 // Milestones
-game.milestones.set('sandcastleUnlock', new Milestone('sandcastleUnlock', function () { return (game.resources.get('sand').amount >= 10); }, function () {
+game.milestones.set('sandcastleUnlock', new Milestone(function () { return (game.resources.get('sand').amount >= 10); }, function () {
     log('You have a little pile of sand. You could make a sandcastle out of it');
     this.active = false;
 }));
-game.milestones.set('tooMuchWet', new Milestone('tooMuchWet', function () { return (game.resources.get('wet').amount >= 99); }, function () {
+game.milestones.set('tooMuchWet', new Milestone(function () { return (game.resources.get('wet').amount >= 99); }, function () {
     log('Ocean ran out');
     game.globals.oceanDrained = true;
     this.active = false;
 }));
-game.milestones.set('unlockCrabitalist', new Milestone('unlockCrabitalist', function () { return (game.resources.get('sandcastles').amount >= 10); }, function () {
+game.milestones.set('unlockCrabitalist', new Milestone(function () { return (game.resources.get('sandcastles').amount >= 3); }, function () {
     log('Your sandcastles have attracted the attention of a wealthy crabitalist');
     game.globals.crabitalist = true;
     this.active = false;
 }));
-game.milestones.set('firstRoom', new Milestone('firstRoom', function () { return (game.resources.get('crabs').amount >= 2); }, function () {
+game.milestones.set('firstRoom', new Milestone(function () { return (game.resources.get('crabs').amount >= 2); }, function () {
     log('Another crab moves into the new room');
+    this.active = false;
+}));
+game.milestones.set('crabitalistReturns', new Milestone(function () { return (game.resources.get('crabs').amount >= 5); }, function () {
+    log('The Crabitalist has returned!');
+    game.globals.crabitalist = true;
+    game.globals.crabitalistState = 1;
     this.active = false;
 }));
 /*
@@ -270,7 +282,7 @@ function cheat() {
 }
 function gatherButton() {
     addResourceName('sand', 1);
-    if (Math.random() < (1 / 244)) {
+    if (Math.random() < (1 / 15)) {
         addResourceName('rocks', 1);
         log('You found a cool rock in the sand');
     }
@@ -291,6 +303,17 @@ function buyBucket() {
         game.globals.crabitalist = false;
     }
     saveGame();
+}
+function buyMould() {
+    if (prices.mould.spend()) {
+        log('"Thank you for your patronage!"');
+        game.globals.mould = true;
+    }
+}
+function rockTrade() {
+    if (prices.rockTrade.spend()) {
+        addResourceName('rocks', 5);
+    }
 }
 function makeFancySandcastle() {
     if (prices.fancySandcastle.spend()) {
@@ -318,6 +341,13 @@ function addRoom() {
  *******************************************/
 function crabTick() {
     addResourceName('sand', game.buildings.get('crabs').amount);
+    if (game.globals.mould) {
+        game.globals.mouldTicks++;
+        if (game.globals.mouldTicks > 10) {
+            game.globals.mouldTicks -= 10;
+            makeSandcastle();
+        }
+    }
 }
 /**********************************
  *                                *
