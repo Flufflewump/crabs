@@ -252,6 +252,7 @@ let prices = {
 
 	bucket: new Price([new ResourceCost(game.resources.get('sandcastles'), 5, constantPrice)]),
 	rockTrade: new Price([new ResourceCost(game.resources.get('sandcastles'), 3, constantPrice)]),
+	rockTrade10: new Price([new ResourceCost(game.resources.get('sandcastles'), 30, constantPrice)]),
 	mould: new Price([new ResourceCost(game.resources.get('rocks'), 20, constantPrice)]),
 
 	room: new Price([
@@ -308,6 +309,7 @@ crabitalistTab.addElement(new TabDiv('"I have many new things for sale!"', () =>
 crabitalistTab.addElement(new ButtonList([
 	new Button('buy-bucket', 'Buy bucket', 'buyBucket()', () => !game.globals.bucket, () => prices.bucket.canAfford(), prices.bucket),
 	new Button('buy-rock', '5 Cool rocks', 'rockTrade()', () => game.globals.crabitalistState == 1, () => prices.rockTrade.canAfford(), prices.rockTrade),
+	new Button('buy-50-rocks', '50 Cool rocks', 'rockTrade(10)', () => game.globals.crabitalistState == 1, () => prices.rockTrade10.canAfford(), prices.rockTrade10),
 	new Button('buy-mould', 'Sandcastle Mould', 'buyMould()', () => (game.globals.crabitalistState == 1 && !game.globals.mould), () => prices.mould.canAfford(), prices.mould)
 ], () => true));
 
@@ -451,9 +453,11 @@ function buyMould() {
 	}
 }
 
-function rockTrade() {
-	if (prices.rockTrade.spend()) {
-		addResourceName('rocks', 5);
+function rockTrade(times: number = 1) {
+	for (var i = 0; i < times; i++) {
+		if (prices.rockTrade.spend()) {
+			addResourceName('rocks', 5);
+		}
 	}
 }
 
